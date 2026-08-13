@@ -136,6 +136,7 @@
       <div class="control-row">
         <span>画面常時点灯:</span>
         <label class="switch-label">
+          <!-- 初期状態はOFF(checkedを外す) -->
           <input type="checkbox" id="wakelock-toggle">
           <span id="wakelock-badge" class="wakelock-status status-off">OFF</span>
         </label>
@@ -157,7 +158,7 @@
     const STORAGE_KEY_OPACITY = 'fog_opacity_value';
     
     const UNFOG_RADIUS_METERS = 50; 
-    const MIN_RECORD_DISTANCE_METERS = 5; // ★ 5メートル以上移動した場合のみ新規記録
+    const MIN_RECORD_DISTANCE_METERS = 5;
 
     let visitedPoints = [];
     let fogOpacity = 1.0;
@@ -166,9 +167,9 @@
 
     let wakeLock = null;
     let watchId = null;
-    let isRenderPending = false; // ★ 描画フレーム管理フラグ
+    let isRenderPending = false;
 
-    // --- 【超軽量化】グラデーションのスタンプ（オフスクリーンCanvas）事前作成 ---
+    // --- グラデーションスタンプ作成 ---
     const STAMP_SIZE = 128;
     const stampCanvas = document.createElement('canvas');
     stampCanvas.width = STAMP_SIZE;
@@ -235,7 +236,7 @@
     }
     window.addEventListener('resize', resizeCanvas);
 
-    // --- 4. 霧の描画処理（★高速転写方式） ---
+    // --- 4. 霧の描画処理 ---
     function drawFog() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = `rgba(255, 255, 255, ${fogOpacity})`;
@@ -247,8 +248,6 @@
 
       for (let i = 0; i < visitedPoints.length; i++) {
         const point = visitedPoints[i];
-        
-        // 画面外はスキップ
         if (!bounds.contains([point.lat, point.lng])) continue;
 
         const containerPoint = map.latLngToContainerPoint([point.lat, point.lng]);
@@ -256,7 +255,6 @@
         const edgePoint = map.latLngToContainerPoint(edgeLatLng);
         const pixelRadius = Math.max(15, Math.abs(edgePoint.x - containerPoint.x));
 
-        // ★ 重い createRadialGradient の代わりにスタンプ画像を転写（超高速）
         const diameter = pixelRadius * 2;
         ctx.drawImage(
           stampCanvas,
@@ -270,7 +268,6 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    // ★ 1フレームに1回だけ描画するように同期（描画の無駄打ち防止）
     function requestDrawFog() {
       if (!isRenderPending) {
         isRenderPending = true;
@@ -289,7 +286,7 @@
       map.setView([last.lat, last.lng], 17);
     }
 
-    // --- 5. Screen Wake Lock API ---
+    // --- 5. Screen Wake Lock API (ユーザー操作時のみ呼び出し) ---
     const wakelockToggle = document.getElementById('wakelock-toggle');
     const wakelockBadge = document.getElementById('wakelock-badge');
 
@@ -299,19 +296,24 @@
           wakeLock = await navigator.wakeLock.request('screen');
           wakelockBadge.innerText = 'ON';
           wakelockBadge.className = 'wakelock-status status-on';
+          wakelockToggle.checked = true;
           
           wakeLock.addEventListener('release', () => {
             wakeLock = null;
             wakelockBadge.innerText = 'OFF';
             wakelockBadge.className = 'wakelock-status status-off';
+            wakelockToggle.checked = false;
           });
         } catch (err) {
+          console.warn('Wake Lock Error:', err);
           wakelockBadge.innerText = 'エラー';
           wakelockBadge.className = 'wakelock-status status-off';
+          wakelockToggle.checked = false;
         }
       } else {
         wakelockBadge.innerText = '非対応';
         wakelockBadge.className = 'wakelock-status status-off';
+        wakelockToggle.checked = false;
       }
     }
 
@@ -320,8 +322,11 @@
         wakeLock.release();
         wakeLock = null;
       }
+      wakelockBadge.innerText = 'OFF';
+      wakelockBadge.className = 'wakelock-status status-off';
     }
 
+    // スイッチ操作で直接切り替え
     wakelockToggle.addEventListener('change', (e) => {
       if (e.target.checked) {
         requestWakeLock();
@@ -330,15 +335,12 @@
       }
     });
 
+    // 画面の復帰時に再要求
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && wakelockToggle.checked) {
         await requestWakeLock();
       }
     });
-
-    if (wakelockToggle.checked) {
-      requestWakeLock();
-    }
 
     // --- 6. UIイベント処理 ---
     const opacitySlider = document.getElementById('opacity-slider');
@@ -352,7 +354,6 @@
       requestDrawFog();
     });
 
-    // 2地点間の距離計算 (メートル)
     function calculateDistance(lat1, lon1, lat2, lon2) {
       const R = 6371000;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -400,7 +401,6 @@
             } else {
               const lastPoint = visitedPoints[visitedPoints.length - 1];
               const dist = calculateDistance(lastPoint.lat, lastPoint.lng, lat, lng);
-              // ★ 前回の記録場所から一定距離以上離れた場合のみ追加
               if (dist >= MIN_RECORD_DISTANCE_METERS) {
                 shouldAdd = true;
               }
@@ -458,7 +458,6 @@
       );
     }
 
-    // 起動
     startGeolocation(true);
 
     document.getElementById('locate-btn').addEventListener('click', () => {
@@ -469,7 +468,6 @@
       }
     });
 
-    // キャッシュ消去
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(registrations => {
         for (let registration of registrations) registration.unregister();
