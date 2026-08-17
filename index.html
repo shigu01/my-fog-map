@@ -37,10 +37,6 @@
     }
     #fog-canvas {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
       pointer-events: none;
     }
 
@@ -272,7 +268,13 @@
 
       const savedTreasures = localStorage.getItem(STORAGE_KEY_TREASURES);
       if (savedTreasures) {
-        try { treasureList = JSON.parse(savedTreasures); } catch (e) { treasureList = []; }
+        try { 
+          const parsed = JSON.parse(savedTreasures);
+          // 破損データを除外して復元
+          treasureList = parsed.filter(t => typeof t.lat === 'number' && typeof t.lng === 'number' && !isNaN(t.lat) && !isNaN(t.lng));
+        } catch (e) { 
+          treasureList = []; 
+        }
       }
     }
 
@@ -295,25 +297,45 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // Leaflet内に霧専用のカスタムペインを作成（タイル上・マーカー下の z-index:350 に設定）
+    // --- 各レイヤーの重ね順（z-index）設定 ---
+    // 1. 霧ペイン (タイル[200]の上)
     map.createPane('fogPane');
-    const fogPane = map.getPane('fogPane');
-    fogPane.style.zIndex = 350;
-    fogPane.style.pointerEvents = 'none';
+    map.getPane('fogPane').style.zIndex = 350;
+    map.getPane('fogPane').style.pointerEvents = 'none';
+
+    // 2. 宝箱ペイン (霧の上)
+    map.createPane('treasurePane');
+    map.getPane('treasurePane').style.zIndex = 600;
+
+    // 3. 自分/現在地ペイン (最前面)
+    map.createPane('userPane');
+    map.getPane('userPane').style.zIndex = 700;
 
     const canvas = document.getElementById('fog-canvas');
-    fogPane.appendChild(canvas); // Canvasをペイン内に格納
+    map.getPane('fogPane').appendChild(canvas); // CanvasをfogPaneへ格納
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
       requestDrawFog();
     }
     window.addEventListener('resize', resizeCanvas);
 
     // --- 4. 霧の描画処理 ---
     function drawFog() {
+      const size = map.getSize();
+      if (size.x === 0 || size.y === 0) return;
+
+      // Canvasの位置を現在の表示領域（Viewport）の左上にぴったり合わせる
+      const origin = map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(canvas, origin);
+
+      if (canvas.width !== size.x || canvas.height !== size.y) {
+        canvas.width = size.x;
+        canvas.height = size.y;
+        canvas.style.width = size.x + 'px';
+        canvas.style.height = size.y + 'px';
+      }
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = `rgba(255, 255, 255, ${fogOpacity})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -354,8 +376,8 @@
       }
     }
 
-    map.on('move zoom rotate', requestDrawFog);
-    resizeCanvas();
+    map.on('move zoom rotate viewreset', requestDrawFog);
+    requestDrawFog();
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
@@ -383,7 +405,12 @@
           iconAnchor: [15, 15]
         });
 
-        const marker = L.marker([t.lat, t.lng], { icon: customIcon }).addTo(map);
+        // 宝箱専用ペイン (treasurePane) に追加
+        const marker = L.marker([t.lat, t.lng], { 
+          icon: customIcon,
+          pane: 'treasurePane'
+        }).addTo(map);
+        
         treasureMarkers[t.id] = marker;
       });
 
@@ -444,7 +471,7 @@
 
         data.elements.forEach(el => {
           if (el.type === 'node') {
-            // Overpass APIの経度キー lon を参照するように修正
+            // Overpass API の経度キーは lon
             nodes[el.id] = { lat: el.lat, lng: el.lon };
           } else if (el.type === 'way') {
             el.nodes.forEach(id => {
@@ -697,13 +724,14 @@
           }
 
           if (!userMarker) {
+            // 自分(現在地)マーカーは userPane に配置
             userMarker = L.circleMarker(currentLatLng, {
               radius: 6,
               fillColor: "#e74c3c",
               color: "#fff",
               weight: 2,
               fillOpacity: 1,
-              zIndexOffset: 2000
+              pane: 'userPane'
             }).addTo(map);
           } else {
             userMarker.setLatLng(currentLatLng);
