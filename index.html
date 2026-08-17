@@ -35,14 +35,23 @@
       width: 100%;
       height: 100%;
     }
-    #fog-canvas {
+    #fog-canvas,
+    #treasure-overlay {
       position: absolute;
       left: 0;
       top: 0;
       width: 100%;
       height: 100%;
-      z-index: 500;
       pointer-events: none;
+      display: block;
+    }
+
+    /* 霧より上、UIより下。宝箱は霧の中でも見える。 */
+    #fog-canvas {
+      z-index: 500;
+    }
+    #treasure-overlay {
+      z-index: 600;
     }
 
     /* コントロールパネル */
