@@ -37,6 +37,8 @@
     }
     #fog-canvas {
       position: absolute;
+      top: 0;
+      left: 0;
       pointer-events: none;
     }
 
@@ -270,7 +272,6 @@
       if (savedTreasures) {
         try { 
           const parsed = JSON.parse(savedTreasures);
-          // 破損データを除外して復元
           treasureList = parsed.filter(t => typeof t.lat === 'number' && typeof t.lng === 'number' && !isNaN(t.lat) && !isNaN(t.lng));
         } catch (e) { 
           treasureList = []; 
@@ -297,22 +298,22 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    // --- 各レイヤーの重ね順（z-index）設定 ---
-    // 1. 霧ペイン (タイル[200]の上)
+    // --- レイヤーの重なり順（z-index）の分離 ---
+    // 1. 霧ペイン (タイル[200]の上: z-index 350)
     map.createPane('fogPane');
     map.getPane('fogPane').style.zIndex = 350;
     map.getPane('fogPane').style.pointerEvents = 'none';
 
-    // 2. 宝箱ペイン (霧の上)
+    // 2. 宝箱ペイン (霧の上: z-index 600)
     map.createPane('treasurePane');
     map.getPane('treasurePane').style.zIndex = 600;
 
-    // 3. 自分/現在地ペイン (最前面)
+    // 3. 自分/現在地ペイン (最前面: z-index 700)
     map.createPane('userPane');
     map.getPane('userPane').style.zIndex = 700;
 
     const canvas = document.getElementById('fog-canvas');
-    map.getPane('fogPane').appendChild(canvas); // CanvasをfogPaneへ格納
+    map.getPane('fogPane').appendChild(canvas); // CanvasをfogPaneへ移動
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
@@ -323,23 +324,29 @@
     // --- 4. 霧の描画処理 ---
     function drawFog() {
       const size = map.getSize();
-      if (size.x === 0 || size.y === 0) return;
+      const w = size.x || window.innerWidth;
+      const h = size.y || window.innerHeight;
 
-      // Canvasの位置を現在の表示領域（Viewport）の左上にぴったり合わせる
+      if (w === 0 || h === 0) return;
+
+      // Canvasの物理ピクセル数とCSS表示幅（px）を更新
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+      }
+
+      // 地図のスクロール・移動に合わせてCanvas要素の位置を補正
       const origin = map.containerPointToLayerPoint([0, 0]);
       L.DomUtil.setPosition(canvas, origin);
 
-      if (canvas.width !== size.x || canvas.height !== size.y) {
-        canvas.width = size.x;
-        canvas.height = size.y;
-        canvas.style.width = size.x + 'px';
-        canvas.style.height = size.y + 'px';
-      }
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // 1. 霧のベース塗りつぶし
+      ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = `rgba(255, 255, 255, ${fogOpacity})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, w, h);
 
+      // 2. 開拓済み地点のくり抜き処理
       ctx.globalCompositeOperation = 'destination-out';
 
       const bounds = map.getBounds().pad(0.2);
@@ -376,8 +383,14 @@
       }
     }
 
-    map.on('move zoom rotate viewreset', requestDrawFog);
-    requestDrawFog();
+    // イベントバインド
+    map.on('move zoom rotate viewreset resize', requestDrawFog);
+
+    // 地図の準備完了後に確実に初描画を実行
+    map.whenReady(() => {
+      requestDrawFog();
+      setTimeout(requestDrawFog, 300); // レイアウト確定後のバックアップ実行
+    });
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
@@ -405,10 +418,9 @@
           iconAnchor: [15, 15]
         });
 
-        // 宝箱専用ペイン (treasurePane) に追加
         const marker = L.marker([t.lat, t.lng], { 
           icon: customIcon,
-          pane: 'treasurePane'
+          pane: 'treasurePane' // 霧より上の層に指定
         }).addTo(map);
         
         treasureMarkers[t.id] = marker;
@@ -471,7 +483,6 @@
 
         data.elements.forEach(el => {
           if (el.type === 'node') {
-            // Overpass API の経度キーは lon
             nodes[el.id] = { lat: el.lat, lng: el.lon };
           } else if (el.type === 'way') {
             el.nodes.forEach(id => {
@@ -724,14 +735,13 @@
           }
 
           if (!userMarker) {
-            // 自分(現在地)マーカーは userPane に配置
             userMarker = L.circleMarker(currentLatLng, {
               radius: 6,
               fillColor: "#e74c3c",
               color: "#fff",
               weight: 2,
               fillOpacity: 1,
-              pane: 'userPane'
+              pane: 'userPane' // 最前面層に移動
             }).addTo(map);
           } else {
             userMarker.setLatLng(currentLatLng);
