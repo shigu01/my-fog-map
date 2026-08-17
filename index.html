@@ -216,8 +216,8 @@
     
     const UNFOG_RADIUS_METERS = 50; 
     const MIN_RECORD_DISTANCE_METERS = 5;
-    const TREASURE_GET_RADIUS_METERS = 20; // 宝箱を開けられる最大距離(20m)
-    const TREASURE_TAP_MAX_ACCURACY_METERS = 15; // タップで開けるために必要なGPS精度
+    const TREASURE_GET_RADIUS_METERS = 25; // 宝箱までの距離 + GPS誤差が25m以内
+    const TREASURE_TAP_MAX_ACCURACY_METERS = 20; // タップで開けるために必要なGPS精度
     const TREASURE_TAP_POSITION_MAX_AGE_MS = 10000; // GPS位置情報の最大経過時間(10秒)
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
 
@@ -237,6 +237,8 @@
     let fogOpacity = 1.0;
     let currentLatLng = null;
     let userMarker = null;
+    let currentAccuracy = null;
+    let currentPositionTimestamp = null;
 
     let wakeLock = null;
     let watchId = null;
@@ -383,6 +385,33 @@
     map.whenReady(() => requestDrawFog());
     map.on('tileload tileloadstart', () => requestDrawFog());
     requestDrawFog();
+
+    // 現在地マーカーを地図の再投影後にも必ず現在座標へ同期する。
+    // Leaflet Rotate使用時のズーム直後などに表示位置が一時的にずれるのを防ぐ。
+    function syncUserMarker() {
+      if (!currentLatLng) return;
+
+      if (!userMarker) {
+        userMarker = L.circleMarker(currentLatLng, {
+          radius: 6,
+          fillColor: '#e74c3c',
+          color: '#fff',
+          weight: 2,
+          fillOpacity: 1,
+          pane: 'userPane'
+        }).addTo(map);
+      } else {
+        userMarker.setLatLng(currentLatLng);
+      }
+    }
+
+    // ズーム／移動／回転の完了時に強制再同期。
+    map.on('zoomend moveend rotateend', () => {
+      requestAnimationFrame(() => {
+        syncUserMarker();
+        if (userMarker && userMarker._update) userMarker._update();
+      });
+    });
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
@@ -588,9 +617,9 @@
         treasure.lng
       );
 
-      // GPSの誤差を考慮し、距離 + 精度 が20m以内のときだけ開ける
+      // GPSの誤差を考慮し、"宝箱までの距離 + GPS誤差" が25m以内のときだけ開ける
       const safeDistance = dist + currentAccuracy;
-      if (dist > TREASURE_GET_RADIUS_METERS || safeDistance > TREASURE_GET_RADIUS_METERS) {
+      if (safeDistance > TREASURE_GET_RADIUS_METERS) {
         showNotification(`🎁 宝箱に近づいてください（約${Math.round(dist)}m）`);
         return;
       }
@@ -758,19 +787,7 @@
 
           }
 
-          if (!userMarker) {
-            // 自分(現在地)マーカーは userPane に配置
-            userMarker = L.circleMarker(currentLatLng, {
-              radius: 6,
-              fillColor: "#e74c3c",
-              color: "#fff",
-              weight: 2,
-              fillOpacity: 1,
-              pane: 'userPane'
-            }).addTo(map);
-          } else {
-            userMarker.setLatLng(currentLatLng);
-          }
+          syncUserMarker();
 
           document.getElementById("status").innerText = 
             `開拓: ${visitedPoints.length}pt (精度:±${Math.round(accuracy)}m)`;
