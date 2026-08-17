@@ -142,6 +142,7 @@
       line-height: 1;
       filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.6));
       pointer-events: auto;
+      cursor: pointer;
     }
     .treasure-marker.opened {
       font-size: 20px;
@@ -195,6 +196,7 @@
         <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0/0</span>
       </div>
       <button id="reload-treasure-btn">🔍 周辺の宝箱を検索</button>
+      <div style="font-size:9px; color:#777; line-height:1.35;">※ 宝箱の近くでマークをタップして開けます</div>
     </div>
 
     <div id="map"></div>
@@ -214,7 +216,9 @@
     
     const UNFOG_RADIUS_METERS = 50; 
     const MIN_RECORD_DISTANCE_METERS = 5;
-    const TREASURE_GET_RADIUS_METERS = 20; // 宝箱を開けられる距離(20m)
+    const TREASURE_GET_RADIUS_METERS = 20; // 宝箱を開けられる最大距離(20m)
+    const TREASURE_TAP_MAX_ACCURACY_METERS = 15; // タップで開けるために必要なGPS精度
+    const TREASURE_TAP_POSITION_MAX_AGE_MS = 10000; // GPS位置情報の最大経過時間(10秒)
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
 
     // Overpass APIのミラーサーバー群
@@ -413,6 +417,11 @@
         }).addTo(map);
 
         treasureMarkers[t.id] = marker;
+
+        // 宝箱は「近くにいて、GPS精度が十分高い」場合だけタップで開ける
+        marker.on('click', () => {
+          tryOpenTreasure(t.id);
+        });
       });
 
       updateTreasureUI();
@@ -549,24 +558,47 @@
       renderTreasures();
     }
 
-    function checkTreasureDistance(lat, lng) {
-      let openedNew = false;
+    function tryOpenTreasure(treasureId) {
+      const treasure = treasureList.find(t => t.id === treasureId);
+      if (!treasure || treasure.opened) return;
 
-      treasureList.forEach(t => {
-        if (!t.opened) {
-          const dist = calculateDistance(lat, lng, t.lat, t.lng);
-          if (dist <= TREASURE_GET_RADIUS_METERS) {
-            t.opened = true;
-            openedNew = true;
-            showNotification('🎁 宝箱を開けました！');
-          }
-        }
-      });
-
-      if (openedNew) {
-        localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
-        renderTreasures();
+      // GPS位置情報が取得できていない場合
+      if (!currentLatLng || !Number.isFinite(currentAccuracy) || !currentPositionTimestamp) {
+        showNotification('📍 現在地を取得中です。少し待ってからもう一度タップしてください');
+        return;
       }
+
+      // 古い位置情報は使わない
+      const positionAge = Date.now() - currentPositionTimestamp;
+      if (positionAge > TREASURE_TAP_POSITION_MAX_AGE_MS) {
+        showNotification('📍 現在地の情報が古くなっています。少し待ってからもう一度タップしてください');
+        return;
+      }
+
+      // GPS精度が低い状態では絶対に開けない
+      if (currentAccuracy > TREASURE_TAP_MAX_ACCURACY_METERS) {
+        showNotification(`📍 GPS精度が低いため開けません（現在 ±${Math.round(currentAccuracy)}m）`);
+        return;
+      }
+
+      const dist = calculateDistance(
+        currentLatLng[0],
+        currentLatLng[1],
+        treasure.lat,
+        treasure.lng
+      );
+
+      // GPSの誤差を考慮し、距離 + 精度 が20m以内のときだけ開ける
+      const safeDistance = dist + currentAccuracy;
+      if (dist > TREASURE_GET_RADIUS_METERS || safeDistance > TREASURE_GET_RADIUS_METERS) {
+        showNotification(`🎁 宝箱に近づいてください（約${Math.round(dist)}m）`);
+        return;
+      }
+
+      treasure.opened = true;
+      localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+      showNotification('🎁 宝箱を開けました！');
+      renderTreasures();
     }
 
     function showNotification(msg) {
@@ -688,6 +720,8 @@
           const accuracy = position.coords.accuracy;
 
           currentLatLng = [lat, lng];
+          currentAccuracy = accuracy;
+          currentPositionTimestamp = Date.now();
 
           if (visitedPoints.length === 0 && !userMarker) {
             map.setView(currentLatLng, 17);
@@ -722,7 +756,6 @@
               requestDrawFog();
             }
 
-            checkTreasureDistance(lat, lng);
           }
 
           if (!userMarker) {
