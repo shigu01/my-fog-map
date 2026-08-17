@@ -41,7 +41,6 @@
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 400;
       pointer-events: none;
     }
 
@@ -296,7 +295,14 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
+    // Leaflet内に霧専用のカスタムペインを作成（タイル上・マーカー下の z-index:350 に設定）
+    map.createPane('fogPane');
+    const fogPane = map.getPane('fogPane');
+    fogPane.style.zIndex = 350;
+    fogPane.style.pointerEvents = 'none';
+
     const canvas = document.getElementById('fog-canvas');
+    fogPane.appendChild(canvas); // Canvasをペイン内に格納
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
@@ -377,8 +383,7 @@
           iconAnchor: [15, 15]
         });
 
-        // zIndexOffsetを高く設定し、霧の上に最前面表示
-        const marker = L.marker([t.lat, t.lng], { icon: customIcon, zIndexOffset: 1000 }).addTo(map);
+        const marker = L.marker([t.lat, t.lng], { icon: customIcon }).addTo(map);
         treasureMarkers[t.id] = marker;
       });
 
@@ -396,7 +401,6 @@
 
       showNotification('🔍 周辺の宝箱を検索中...');
 
-      // 検索範囲を300mに縮小して軽量化
       const radius = 300;
       const query = `
         [out:json][timeout:10];
@@ -409,7 +413,6 @@
       `;
 
       let data = null;
-      // POSTリクエストで送信
       for (const endpoint of OVERPASS_ENDPOINTS) {
         try {
           const res = await fetch(endpoint, {
@@ -428,7 +431,6 @@
         }
       }
 
-      // API失敗時の「オフライン自動生成救済機能」
       if (!data || !data.elements) {
         console.warn("API取得失敗のため、オフライン救済モードで宝箱を生成します");
         generateFallbackTreasures(lat, lng);
@@ -442,7 +444,8 @@
 
         data.elements.forEach(el => {
           if (el.type === 'node') {
-            nodes[el.id] = { lat: el.lat, lng: el.lng };
+            // Overpass APIの経度キー lon を参照するように修正
+            nodes[el.id] = { lat: el.lat, lng: el.lon };
           } else if (el.type === 'way') {
             el.nodes.forEach(id => {
               nodeCounts[id] = (nodeCounts[id] || 0) + 1;
@@ -471,7 +474,6 @@
           localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
           showNotification(`🎁 新しく宝箱を ${newAddedCount} 個発見！`);
         } else {
-          // 行き止まりがない場合は救済で宝箱を配置
           generateFallbackTreasures(lat, lng);
         }
 
@@ -484,7 +486,6 @@
       }
     }
 
-    // オフライン・通信エラー用の自動宝箱生成関数
     function generateFallbackTreasures(lat, lng) {
       let added = 0;
       const offsets = [
@@ -548,10 +549,8 @@
       }, 3500);
     }
 
-    // 初期化時に保存済み宝箱を描画
     renderTreasures();
 
-    // 手動再検索ボタン
     document.getElementById('reload-treasure-btn').addEventListener('click', () => {
       if (currentLatLng) {
         lastFetchedLatLng = { lat: currentLatLng[0], lng: currentLatLng[1] };
@@ -665,7 +664,6 @@
             map.setView(currentLatLng, 17);
           }
 
-          // 初回GPS取得、または前回から300m移動時に自動宝箱取得
           if (!lastFetchedLatLng || calculateDistance(lastFetchedLatLng.lat, lastFetchedLatLng.lng, lat, lng) >= REFETCH_TREASURE_DISTANCE) {
             lastFetchedLatLng = { lat, lng };
             fetchDeadEndTreasures(lat, lng);
@@ -695,7 +693,6 @@
               requestDrawFog();
             }
 
-            // 宝箱への接近判定
             checkTreasureDistance(lat, lng);
           }
 
