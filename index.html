@@ -348,16 +348,20 @@
         const point = visitedPoints[i];
         if (!bounds.contains([point.lat, point.lng])) continue;
 
-        const containerPoint = map.latLngToContainerPoint([point.lat, point.lng]);
+        // CanvasはfogPane（Leafletのlayer座標系）に配置しているため、
+        // containerPointではなくlayerPointを使って描画する。
+        // 宝箱マーカー追加などでLeafletがペインを再配置した際も、霧が
+        // 地図と一緒に正しい位置へ追従するようにする。
+        const layerPoint = map.latLngToLayerPoint([point.lat, point.lng]);
         const edgeLatLng = L.latLng(point.lat, point.lng + (point.radius / 111320));
-        const edgePoint = map.latLngToContainerPoint(edgeLatLng);
-        const pixelRadius = Math.max(15, Math.abs(edgePoint.x - containerPoint.x));
+        const edgePoint = map.latLngToLayerPoint(edgeLatLng);
+        const pixelRadius = Math.max(15, Math.abs(edgePoint.x - layerPoint.x));
 
         const diameter = pixelRadius * 2;
         ctx.drawImage(
           stampCanvas,
-          containerPoint.x - pixelRadius,
-          containerPoint.y - pixelRadius,
+          layerPoint.x - pixelRadius,
+          layerPoint.y - pixelRadius,
           diameter,
           diameter
         );
@@ -406,15 +410,16 @@
         });
 
         // 宝箱専用ペイン (treasurePane) に追加
-        const marker = L.marker([t.lat, t.lng], { 
+        const marker = L.marker([t.lat, t.lng], {
           icon: customIcon,
           pane: 'treasurePane'
         }).addTo(map);
-        
+
         treasureMarkers[t.id] = marker;
       });
 
       updateTreasureUI();
+      requestDrawFog();
     }
 
     function updateTreasureUI() {
