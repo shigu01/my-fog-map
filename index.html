@@ -35,23 +35,14 @@
       width: 100%;
       height: 100%;
     }
-    #fog-canvas,
-    #treasure-overlay {
+    #fog-canvas {
       position: absolute;
       left: 0;
       top: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
-      display: block;
-    }
-
-    /* 霧より上、UIより下。宝箱は霧の中でも見える。 */
-    #fog-canvas {
       z-index: 500;
-    }
-    #treasure-overlay {
-      z-index: 600;
+      pointer-events: none;
     }
 
     /* コントロールパネル */
@@ -208,7 +199,6 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <canvas id="treasure-overlay"></canvas>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -322,15 +312,11 @@
     map.getPane('userPane').style.zIndex = 700;
 
     const canvas = document.getElementById('fog-canvas');
-    const treasureCanvas = document.getElementById('treasure-overlay');
     document.getElementById('map-container').appendChild(canvas);
-    document.getElementById('map-container').appendChild(treasureCanvas);
     const ctx = canvas.getContext('2d');
-    const treasureCtx = treasureCanvas.getContext('2d');
 
     function resizeCanvas() {
       requestDrawFog();
-      requestDrawTreasures();
     }
     window.addEventListener('resize', resizeCanvas);
 
@@ -379,50 +365,6 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    // --- 霧の上に宝箱の位置だけを描画 ---
-    function drawTreasures() {
-      const size = map.getSize();
-      if (size.x === 0 || size.y === 0) return;
-
-      if (treasureCanvas.width !== size.x || treasureCanvas.height !== size.y) {
-        treasureCanvas.width = size.x;
-        treasureCanvas.height = size.y;
-        treasureCanvas.style.width = size.x + 'px';
-        treasureCanvas.style.height = size.y + 'px';
-      }
-
-      treasureCtx.clearRect(0, 0, treasureCanvas.width, treasureCanvas.height);
-
-      const bounds = map.getBounds().pad(0.2);
-      treasureList.forEach(t => {
-        if (!Number.isFinite(t.lat) || !Number.isFinite(t.lng)) return;
-        if (!bounds.contains([t.lat, t.lng])) return;
-
-        const point = map.latLngToContainerPoint([t.lat, t.lng]);
-        const symbol = t.opened ? '💎' : '🎁';
-
-        // 霧の上でも視認できるよう、暗い円形の背景を付ける
-        treasureCtx.beginPath();
-        treasureCtx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-        treasureCtx.arc(point.x, point.y, 17, 0, Math.PI * 2);
-        treasureCtx.fill();
-
-        treasureCtx.save();
-        treasureCtx.textAlign = 'center';
-        treasureCtx.textBaseline = 'middle';
-        treasureCtx.font = t.opened ? '20px sans-serif' : '26px sans-serif';
-        treasureCtx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-        treasureCtx.shadowBlur = 4;
-        treasureCtx.fillText(symbol, point.x, point.y + 1);
-        treasureCtx.restore();
-      });
-    }
-
-    function requestDrawTreasures() {
-      requestDrawFog();
-      requestAnimationFrame(drawTreasures);
-    }
-
     function requestDrawFog() {
       if (!isRenderPending) {
         isRenderPending = true;
@@ -433,20 +375,10 @@
       }
     }
 
-    map.on('move zoom rotate viewreset resize load', () => {
-      requestDrawFog();
-      requestDrawTreasures();
-    });
-    map.whenReady(() => {
-      requestDrawFog();
-      requestDrawTreasures();
-    });
-    map.on('tileload tileloadstart', () => {
-      requestDrawFog();
-      requestDrawTreasures();
-    });
+    map.on('move zoom rotate viewreset resize load', requestDrawFog);
+    map.whenReady(() => requestDrawFog());
+    map.on('tileload tileloadstart', () => requestDrawFog());
     requestDrawFog();
-    requestDrawTreasures();
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
@@ -455,8 +387,36 @@
 
     // --- 5. 宝箱表示・Overpass API描画処理 ---
     function renderTreasures() {
+      treasureList.forEach(t => {
+        const iconSymbol = t.opened ? '💎' : '🎁';
+        
+        if (treasureMarkers[t.id]) {
+          const el = treasureMarkers[t.id].getElement();
+          if (el) {
+            el.innerHTML = iconSymbol;
+            if (t.opened) el.classList.add('opened');
+          }
+          return;
+        }
+
+        const customIcon = L.divIcon({
+          className: `treasure-marker ${t.opened ? 'opened' : ''}`,
+          html: iconSymbol,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15]
+        });
+
+        // 宝箱専用ペイン (treasurePane) に追加
+        const marker = L.marker([t.lat, t.lng], {
+          icon: customIcon,
+          pane: 'treasurePane'
+        }).addTo(map);
+
+        treasureMarkers[t.id] = marker;
+      });
+
       updateTreasureUI();
-      requestDrawTreasures();
+      requestDrawFog();
     }
 
     function updateTreasureUI() {
