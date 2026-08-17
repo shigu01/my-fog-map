@@ -37,6 +37,11 @@
     }
     #fog-canvas {
       position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 500;
       pointer-events: none;
     }
 
@@ -298,12 +303,7 @@
     }).addTo(map);
 
     // --- 各レイヤーの重ね順（z-index）設定 ---
-    // 1. 霧ペイン (タイル[200]の上)
-    map.createPane('fogPane');
-    map.getPane('fogPane').style.zIndex = 350;
-    map.getPane('fogPane').style.pointerEvents = 'none';
-
-    // 2. 宝箱ペイン (霧の上)
+    // 1. 宝箱ペイン (霧の上)
     map.createPane('treasurePane');
     map.getPane('treasurePane').style.zIndex = 600;
 
@@ -312,7 +312,7 @@
     map.getPane('userPane').style.zIndex = 700;
 
     const canvas = document.getElementById('fog-canvas');
-    map.getPane('fogPane').appendChild(canvas); // CanvasをfogPaneへ格納
+    document.getElementById('map-container').appendChild(canvas);
     const ctx = canvas.getContext('2d');
 
     function resizeCanvas() {
@@ -325,10 +325,8 @@
       const size = map.getSize();
       if (size.x === 0 || size.y === 0) return;
 
-      // Canvasの位置を現在の表示領域（Viewport）の左上にぴったり合わせる
-      const origin = map.containerPointToLayerPoint([0, 0]);
-      L.DomUtil.setPosition(canvas, origin);
-
+      // Canvasはmap-container直下の固定オーバーレイなので、
+      // 常に画面（コンテナ）の左上から描画する。
       if (canvas.width !== size.x || canvas.height !== size.y) {
         canvas.width = size.x;
         canvas.height = size.y;
@@ -348,20 +346,17 @@
         const point = visitedPoints[i];
         if (!bounds.contains([point.lat, point.lng])) continue;
 
-        // CanvasはfogPane（Leafletのlayer座標系）に配置しているため、
-        // containerPointではなくlayerPointを使って描画する。
-        // 宝箱マーカー追加などでLeafletがペインを再配置した際も、霧が
-        // 地図と一緒に正しい位置へ追従するようにする。
-        const layerPoint = map.latLngToLayerPoint([point.lat, point.lng]);
+        // Canvasはmap-container直下なので、描画座標はcontainerPointを使う。
+        const containerPoint = map.latLngToContainerPoint([point.lat, point.lng]);
         const edgeLatLng = L.latLng(point.lat, point.lng + (point.radius / 111320));
-        const edgePoint = map.latLngToLayerPoint(edgeLatLng);
-        const pixelRadius = Math.max(15, Math.abs(edgePoint.x - layerPoint.x));
+        const edgePoint = map.latLngToContainerPoint(edgeLatLng);
+        const pixelRadius = Math.max(15, Math.abs(edgePoint.x - containerPoint.x));
 
         const diameter = pixelRadius * 2;
         ctx.drawImage(
           stampCanvas,
-          layerPoint.x - pixelRadius,
-          layerPoint.y - pixelRadius,
+          containerPoint.x - pixelRadius,
+          containerPoint.y - pixelRadius,
           diameter,
           diameter
         );
@@ -380,7 +375,9 @@
       }
     }
 
-    map.on('move zoom rotate viewreset', requestDrawFog);
+    map.on('move zoom rotate viewreset resize load', requestDrawFog);
+    map.whenReady(() => requestDrawFog());
+    map.on('tileload tileloadstart', () => requestDrawFog());
     requestDrawFog();
 
     if (visitedPoints.length > 0) {
