@@ -51,8 +51,8 @@
       top: 12px;
       left: 12px;
       z-index: 1000;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 8px 12px;
       border-radius: 8px;
       font-size: 11px;
       color: #333;
@@ -60,14 +60,14 @@
       font-family: sans-serif;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
     }
 
     #status {
-      font-size: 9px;
-      color: #777;
+      font-size: 10px;
+      color: #555;
       font-weight: normal;
-      max-width: 160px;
+      max-width: 180px;
       word-wrap: break-word;
     }
 
@@ -99,6 +99,20 @@
     .status-on { background: #e3f9e5; color: #1f9d55; }
     .status-off { background: #f1f3f5; color: #868e96; }
 
+    #reload-treasure-btn {
+      margin-top: 2px;
+      padding: 4px 8px;
+      font-size: 10px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #reload-treasure-btn:active {
+      background: #2980b9;
+    }
+
     #locate-btn {
       position: absolute;
       bottom: 24px;
@@ -123,14 +137,15 @@
 
     /* --- 宝箱スタイル & 通知ポップアップ --- */
     .treasure-marker {
-      font-size: 24px;
+      font-size: 26px;
       text-align: center;
       line-height: 1;
-      filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
+      filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.6));
+      pointer-events: auto;
     }
     .treasure-marker.opened {
       font-size: 20px;
-      opacity: 0.75;
+      opacity: 0.7;
     }
 
     #notification {
@@ -155,7 +170,7 @@
 <body>
 
   <div id="map-container">
-    <!-- 宝箱発見通知 -->
+    <!-- 画面通知 -->
     <div id="notification"></div>
 
     <div id="controls">
@@ -174,11 +189,12 @@
         </label>
       </div>
 
-      <!-- 宝箱獲得数表示 -->
-      <div class="control-row" style="border-top: 1px solid #eee; padding-top: 2px; margin-top:2px;">
+      <!-- 宝箱獲得数表示と手動取得ボタン -->
+      <div class="control-row" style="border-top: 1px solid #ddd; padding-top: 4px; margin-top:2px;">
         <span>宝箱獲得:</span>
         <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0/0</span>
       </div>
+      <button id="reload-treasure-btn">🔍 周辺の宝箱を再検索</button>
     </div>
 
     <div id="map"></div>
@@ -199,13 +215,20 @@
     const UNFOG_RADIUS_METERS = 50; 
     const MIN_RECORD_DISTANCE_METERS = 5;
     const TREASURE_GET_RADIUS_METERS = 20; // 宝箱を開けられる距離(20m)
-    const REFETCH_TREASURE_DISTANCE = 300;  // 宝箱読み込み地点から300m移動したら再取得
+    const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
+
+    // Overpass APIのミラーサーバー（1つ目が失敗した場合に予備を使用）
+    const OVERPASS_ENDPOINTS = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+      'https://overpass.private.coffee/api/interpreter'
+    ];
 
     let visitedPoints = [];
     let treasureList = []; // { id, lat, lng, opened }
     let treasureMarkers = {};
     let isFetchingTreasures = false;
-    let lastFetchedLatLng = null; // 前回の宝箱データ読み込み地点
+    let lastFetchedLatLng = null; // 前回の宝箱読み込み地点
 
     let fogOpacity = 1.0;
     let currentLatLng = null;
@@ -333,7 +356,7 @@
       map.setView([last.lat, last.lng], 17);
     }
 
-    // --- 5. 行き止まり宝箱システム ---
+    // --- 5. 宝箱表示・Overpass API描画処理 ---
     function renderTreasures() {
       treasureList.forEach(t => {
         const iconSymbol = t.opened ? '💎' : '🎁';
@@ -354,7 +377,8 @@
           iconAnchor: [15, 15]
         });
 
-        const marker = L.marker([t.lat, t.lng], { icon: customIcon, zIndexOffset: 300 }).addTo(map);
+        // 霧（z-index:400）より手前に表示されるよう zIndexOffset を設定
+        const marker = L.marker([t.lat, t.lng], { icon: customIcon, zIndexOffset: 1000 }).addTo(map);
         treasureMarkers[t.id] = marker;
       });
 
@@ -370,23 +394,42 @@
       if (isFetchingTreasures) return;
       isFetchingTreasures = true;
 
-      // Overpass APIで周辺600mの道路端点を取得
+      showNotification('🔍 周辺の宝箱を検索中...');
+
+      // 半径600mの道路を取得
       const radius = 600;
       const query = `
         [out:json][timeout:15];
         (
-          way["highway"~"residential|service|footway|path|living_street"](around:${radius},${lat},${lng});
+          way["highway"~"residential|service|footway|path|living_street|track"](around:${radius},${lat},${lng});
         );
         out body;
         >;
         out skel qt;
       `;
-      const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+      let data = null;
+      // 複数のミラーサーバーから順番に試行
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const url = `${endpoint}?data=${encodeURIComponent(query)}`;
+          const res = await fetch(url);
+          if (res.ok) {
+            data = await res.json();
+            break;
+          }
+        } catch (e) {
+          console.warn(`Endpoint ${endpoint} failed, trying next...`);
+        }
+      }
+
+      if (!data || !data.elements) {
+        showNotification('⚠️ 宝箱データの取得に失敗しました');
+        isFetchingTreasures = false;
+        return;
+      }
 
       try {
-        const res = await fetch(url);
-        const data = await res.json();
-
         const nodeCounts = {};
         const nodes = {};
 
@@ -400,12 +443,12 @@
           }
         });
 
-        let added = false;
+        let newAddedCount = 0;
         for (const id in nodeCounts) {
-          // 出現回数が1回＝行き止まり（端点）
+          // 出現回数が1回 ＝ 行き止まり・端点
           if (nodeCounts[id] === 1 && nodes[id]) {
             const node = nodes[id];
-            // 既存の宝箱と15m以上離れているかチェック（重複登録防止）
+            // 15m以内に既存の宝箱がない場合のみ追加
             const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, node.lat, node.lng) < 15);
             if (!exists) {
               treasureList.push({
@@ -414,17 +457,22 @@
                 lng: node.lng,
                 opened: false
               });
-              added = true;
+              newAddedCount++;
             }
           }
         }
 
-        if (added) {
+        if (newAddedCount > 0) {
           localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+          showNotification(`🎁 新しく宝箱を ${newAddedCount} 個発見！`);
+        } else {
+          showNotification(`周辺に新しい宝箱は見つかりませんでした`);
         }
+
         renderTreasures();
       } catch (err) {
-        console.warn("宝箱の自動取得エラー:", err);
+        console.error("宝箱解析エラー:", err);
+        showNotification('⚠️ 宝箱データの読み込みエラー');
       } finally {
         isFetchingTreasures = false;
       }
@@ -439,7 +487,7 @@
           if (dist <= TREASURE_GET_RADIUS_METERS) {
             t.opened = true;
             openedNew = true;
-            showNotification('🎁 行き止まりの宝箱を発見しました！');
+            showNotification('🎁 宝箱を開けました！');
           }
         }
       });
@@ -462,6 +510,16 @@
     // 初期化時に保存済み宝箱を描画
     renderTreasures();
 
+    // 手動再検索ボタン
+    document.getElementById('reload-treasure-btn').addEventListener('click', () => {
+      if (currentLatLng) {
+        lastFetchedLatLng = { lat: currentLatLng[0], lng: currentLatLng[1] };
+        fetchDeadEndTreasures(currentLatLng[0], currentLatLng[1]);
+      } else {
+        alert("GPSで現在地を取得するまでお待ちください。");
+      }
+    });
+
     // --- 6. Screen Wake Lock API ---
     const wakelockToggle = document.getElementById('wakelock-toggle');
     const wakelockBadge = document.getElementById('wakelock-badge');
@@ -481,7 +539,6 @@
             wakelockToggle.checked = false;
           });
         } catch (err) {
-          console.warn('Wake Lock Error:', err);
           wakelockBadge.innerText = 'エラー';
           wakelockBadge.className = 'wakelock-status status-off';
           wakelockToggle.checked = false;
@@ -567,7 +624,7 @@
             map.setView(currentLatLng, 17);
           }
 
-          // 初回、または「前回の宝箱読み込み地点」から300m以上離れたら新しい宝箱を検索・追加
+          // 初回GPS取得、または前回から300m移動時に自動宝箱取得
           if (!lastFetchedLatLng || calculateDistance(lastFetchedLatLng.lat, lastFetchedLatLng.lng, lat, lng) >= REFETCH_TREASURE_DISTANCE) {
             lastFetchedLatLng = { lat, lng };
             fetchDeadEndTreasures(lat, lng);
@@ -607,14 +664,15 @@
               fillColor: "#e74c3c",
               color: "#fff",
               weight: 2,
-              fillOpacity: 1
+              fillOpacity: 1,
+              zIndexOffset: 2000
             }).addTo(map);
           } else {
             userMarker.setLatLng(currentLatLng);
           }
 
           document.getElementById("status").innerText = 
-            `開拓: ${visitedPoints.length}pt (±${Math.round(accuracy)}m)`;
+            `開拓: ${visitedPoints.length}pt (精度:±${Math.round(accuracy)}m)`;
         },
         (error) => {
           console.warn("GPSエラー:", error);
