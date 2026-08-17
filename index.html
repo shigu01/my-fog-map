@@ -194,7 +194,7 @@
         <span>宝箱獲得:</span>
         <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0/0</span>
       </div>
-      <button id="reload-treasure-btn">🔍 周辺の宝箱を再検索</button>
+      <button id="reload-treasure-btn">🔍 周辺の宝箱を検索</button>
     </div>
 
     <div id="map"></div>
@@ -217,7 +217,7 @@
     const TREASURE_GET_RADIUS_METERS = 20; // 宝箱を開けられる距離(20m)
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
 
-    // Overpass APIのミラーサーバー（1つ目が失敗した場合に予備を使用）
+    // Overpass APIのミラーサーバー群
     const OVERPASS_ENDPOINTS = [
       'https://overpass-api.de/api/interpreter',
       'https://overpass.kumi.systems/api/interpreter',
@@ -377,7 +377,7 @@
           iconAnchor: [15, 15]
         });
 
-        // 霧（z-index:400）より手前に表示されるよう zIndexOffset を設定
+        // zIndexOffsetを高く設定し、霧の上に最前面表示
         const marker = L.marker([t.lat, t.lng], { icon: customIcon, zIndexOffset: 1000 }).addTo(map);
         treasureMarkers[t.id] = marker;
       });
@@ -396,12 +396,12 @@
 
       showNotification('🔍 周辺の宝箱を検索中...');
 
-      // 半径600mの道路を取得
-      const radius = 600;
+      // 検索範囲を300mに縮小して軽量化
+      const radius = 300;
       const query = `
-        [out:json][timeout:15];
+        [out:json][timeout:10];
         (
-          way["highway"~"residential|service|footway|path|living_street|track"](around:${radius},${lat},${lng});
+          way["highway"~"residential|service|footway|path|living_street"](around:${radius},${lat},${lng});
         );
         out body;
         >;
@@ -409,11 +409,16 @@
       `;
 
       let data = null;
-      // 複数のミラーサーバーから順番に試行
+      // POSTリクエストで送信
       for (const endpoint of OVERPASS_ENDPOINTS) {
         try {
-          const url = `${endpoint}?data=${encodeURIComponent(query)}`;
-          const res = await fetch(url);
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: 'data=' + encodeURIComponent(query)
+          });
           if (res.ok) {
             data = await res.json();
             break;
@@ -423,8 +428,10 @@
         }
       }
 
+      // API失敗時の「オフライン自動生成救済機能」
       if (!data || !data.elements) {
-        showNotification('⚠️ 宝箱データの取得に失敗しました');
+        console.warn("API取得失敗のため、オフライン救済モードで宝箱を生成します");
+        generateFallbackTreasures(lat, lng);
         isFetchingTreasures = false;
         return;
       }
@@ -445,11 +452,9 @@
 
         let newAddedCount = 0;
         for (const id in nodeCounts) {
-          // 出現回数が1回 ＝ 行き止まり・端点
           if (nodeCounts[id] === 1 && nodes[id]) {
             const node = nodes[id];
-            // 15m以内に既存の宝箱がない場合のみ追加
-            const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, node.lat, node.lng) < 15);
+            const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, node.lat, node.lng) < 20);
             if (!exists) {
               treasureList.push({
                 id: 'tr_' + id,
@@ -466,16 +471,52 @@
           localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
           showNotification(`🎁 新しく宝箱を ${newAddedCount} 個発見！`);
         } else {
-          showNotification(`周辺に新しい宝箱は見つかりませんでした`);
+          // 行き止まりがない場合は救済で宝箱を配置
+          generateFallbackTreasures(lat, lng);
         }
 
         renderTreasures();
       } catch (err) {
-        console.error("宝箱解析エラー:", err);
-        showNotification('⚠️ 宝箱データの読み込みエラー');
+        console.error("解析エラー:", err);
+        generateFallbackTreasures(lat, lng);
       } finally {
         isFetchingTreasures = false;
       }
+    }
+
+    // オフライン・通信エラー用の自動宝箱生成関数
+    function generateFallbackTreasures(lat, lng) {
+      let added = 0;
+      const offsets = [
+        { dLat: 0.0012, dLng: 0.0010 },
+        { dLat: -0.0010, dLng: 0.0015 },
+        { dLat: 0.0015, dLng: -0.0012 },
+        { dLat: -0.0014, dLng: -0.0011 }
+      ];
+
+      offsets.forEach((off, idx) => {
+        const tLat = lat + off.dLat;
+        const tLng = lng + off.dLng;
+        const id = `fb_${Math.floor(lat * 1000)}_${Math.floor(lng * 1000)}_${idx}`;
+        const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, tLat, tLng) < 25);
+        if (!exists) {
+          treasureList.push({
+            id: id,
+            lat: tLat,
+            lng: tLng,
+            opened: false
+          });
+          added++;
+        }
+      });
+
+      if (added > 0) {
+        localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+        showNotification(`🎁 周辺に宝箱を ${added} 個配置しました`);
+      } else {
+        showNotification(`周辺の宝箱は配置済みです`);
+      }
+      renderTreasures();
     }
 
     function checkTreasureDistance(lat, lng) {
