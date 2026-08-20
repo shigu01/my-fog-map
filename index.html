@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.7</div>
+    <div id="app-version">v1.0.8</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -250,7 +250,10 @@
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
     const TREASURE_SEARCH_RADIUS_METERS = 400;
     const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS = 60;
-    const TREASURE_ALGORITHM_VERSION = 'dead-end-v5';
+    const TREASURE_ALGORITHM_VERSION = 'dead-end-v6';
+    // 候補地点から別の道路way線分までがこの距離以内なら、
+    // OSM上でnodeを共有していなくても実質的な接続・交差点とみなして除外する。
+    const NEAR_OTHER_WAY_METERS = 6;
 
     // Overpass APIのミラーサーバー群
     const OVERPASS_ENDPOINTS = [
@@ -610,6 +613,59 @@
         const searchRadius = radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
         const deadEndCandidates = [];
 
+        // OSMでは、実世界では接続している歩道・小道・サービス道路などが
+        // nodeを共有していないことがあります。
+        // そのため「別wayの線分までの距離」も調べ、幾何学的に近い場合は
+        // 実質的なT字路/Y字路/交差点として行き止まり候補から除外します。
+        function pointToSegmentDistanceMeters(p, a, b) {
+          const latRef = p.lat;
+          const mPerDegLat = 111320;
+          const mPerDegLng = 111320 * Math.cos(latRef * Math.PI / 180);
+
+          const toXY = (pt) => ({
+            x: (pt.lng - p.lng) * mPerDegLng,
+            y: (pt.lat - p.lat) * mPerDegLat
+          });
+
+          const A = toXY(a);
+          const B = toXY(b);
+          const ABx = B.x - A.x;
+          const ABy = B.y - A.y;
+          const lenSq = ABx * ABx + ABy * ABy;
+          let t = lenSq === 0
+            ? 0
+            : ((-A.x) * ABx + (-A.y) * ABy) / lenSq;
+          t = Math.max(0, Math.min(1, t));
+
+          const closestX = A.x + ABx * t;
+          const closestY = A.y + ABy * t;
+          return Math.hypot(closestX, closestY);
+        }
+
+        function isNearOtherWaySegment(candidate, ownClusterId) {
+          for (const way of ways) {
+            for (let i = 0; i < way.length - 1; i++) {
+              const aId = way[i];
+              const bId = way[i + 1];
+              const aCluster = nodeToCluster[aId];
+              const bCluster = nodeToCluster[bId];
+
+              // 自分のクラスタに接続する線分は、通常の隣接関係として
+              // すでにclusterAdjacencyで評価しているのでスキップ。
+              if (aCluster === ownClusterId || bCluster === ownClusterId) continue;
+
+              const a = nodes[aId];
+              const b = nodes[bId];
+              if (!a || !b) continue;
+
+              if (pointToSegmentDistanceMeters(candidate, a, b) <= NEAR_OTHER_WAY_METERS) {
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+
         clusterList.forEach((cluster, clusterId) => {
           const neighbors = clusterAdjacency[clusterId];
           if (neighbors.size !== 1) return;
@@ -632,6 +688,10 @@
               bestNode = node;
             }
           }
+
+          // nodeを共有していない道路が近くを横切っている場合は、
+          // 実質的なT字路/Y字路/交差点として除外する。
+          if (isNearOtherWaySegment(bestNode, clusterId)) return;
 
           deadEndCandidates.push({
             id: `cluster_${clusterId}`,
