@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.2</div>
+    <div id="app-version">v1.0.3</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -414,12 +414,10 @@
     map.on('tileload tileloadstart', () => requestDrawFog());
     requestDrawFog();
 
-    // 地図操作中は現在地マーカーを一時的に非表示にし、
-    // 操作終了後に現在のGPS座標へ再同期する。
-    let isMapManipulating = false;
-    let mapManipulationTimer = null;
-
-    function updateUserMarker(forceShow = false) {
+    // 現在地はDOMベースのL.markerとして常時表示する。
+    // leaflet-rotateのPathレイヤー由来のズレを避けるため、
+    // 地図操作中に表示/非表示や再配置を強制せず、GPS更新時だけ座標を更新する。
+    function updateUserMarker() {
       if (!currentLatLng) return;
 
       if (!userMarker) {
@@ -438,38 +436,7 @@
       } else {
         userMarker.setLatLng(currentLatLng);
       }
-
-      const el = userMarker.getElement();
-      if (el) {
-        el.style.opacity = (forceShow || !isMapManipulating) ? '1' : '0';
-      }
     }
-
-    function hideUserMarkerForMapOperation() {
-      isMapManipulating = true;
-      if (mapManipulationTimer) {
-        clearTimeout(mapManipulationTimer);
-        mapManipulationTimer = null;
-      }
-      if (userMarker) {
-        const el = userMarker.getElement();
-        if (el) el.style.opacity = '0';
-      }
-    }
-
-    function restoreUserMarkerAfterMapOperation() {
-      if (mapManipulationTimer) clearTimeout(mapManipulationTimer);
-      mapManipulationTimer = setTimeout(() => {
-        isMapManipulating = false;
-        // 地図操作が完全に終わってから、現在のGPS座標で一度だけ再配置する。
-        updateUserMarker(true);
-      }, 120);
-    }
-
-    // Leaflet Rotateでは操作中に複数のイベントが発生するため、
-    // 開始時は非表示、終了時だけ再表示する。
-    map.on('movestart zoomstart rotatestart', hideUserMarkerForMapOperation);
-    map.on('moveend zoomend rotateend', restoreUserMarkerAfterMapOperation);
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
