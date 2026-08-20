@@ -741,11 +741,11 @@
         localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
 
         if (newAddedCount > 0) {
-          showNotification(`🎁 行き止まりに宝箱を ${newAddedCount} 個発見！`);
+          showNotification(`🎁 宝箱を ${newAddedCount} 個発見！`);
         } else if (uniqueDeadEnds.length === 0) {
-          showNotification('🔍 この周辺に行き止まりは見つかりませんでした');
+          showNotification('🔍 この周辺に宝箱は見つかりませんでした');
         } else {
-          showNotification(`🔍 行き止まりを ${uniqueDeadEnds.length} 箇所確認しました`);
+          showNotification(`🔍 宝箱を ${uniqueDeadEnds.length} 箇所確認しました`);
         }
 
         renderTreasures();
