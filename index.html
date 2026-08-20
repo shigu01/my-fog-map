@@ -166,6 +166,16 @@
       opacity: 0.7;
     }
 
+    .user-location-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e74c3c;
+      border: 2px solid #fff;
+      box-shadow: 0 0 2px rgba(0,0,0,0.5);
+      box-sizing: border-box;
+    }
+
     #notification {
       position: absolute;
       top: 60px;
@@ -218,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.1</div>
+    <div id="app-version">v1.0.2</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -413,22 +423,25 @@
       if (!currentLatLng) return;
 
       if (!userMarker) {
-        userMarker = L.circleMarker(currentLatLng, {
-          radius: 6,
-          fillColor: '#e74c3c',
-          color: '#fff',
-          weight: 2,
-          fillOpacity: 1,
-          pane: 'userPane'
+        const dotIcon = L.divIcon({
+          className: '',
+          html: '<div class="user-location-dot"></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        });
+
+        userMarker = L.marker(currentLatLng, {
+          icon: dotIcon,
+          pane: 'userPane',
+          interactive: false
         }).addTo(map);
       } else {
         userMarker.setLatLng(currentLatLng);
       }
 
-      if (forceShow || !isMapManipulating) {
-        userMarker.setStyle({ fillOpacity: 1, opacity: 1 });
-      } else {
-        userMarker.setStyle({ fillOpacity: 0, opacity: 0 });
+      const el = userMarker.getElement();
+      if (el) {
+        el.style.opacity = (forceShow || !isMapManipulating) ? '1' : '0';
       }
     }
 
@@ -439,7 +452,8 @@
         mapManipulationTimer = null;
       }
       if (userMarker) {
-        userMarker.setStyle({ fillOpacity: 0, opacity: 0 });
+        const el = userMarker.getElement();
+        if (el) el.style.opacity = '0';
       }
     }
 
