@@ -219,8 +219,8 @@
 
       <!-- 宝箱獲得数表示と手動取得ボタン -->
       <div class="control-row" style="border-top: 1px solid #ddd; padding-top: 4px; margin-top:2px;">
-        <span>宝箱獲得:</span>
-        <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0/0</span>
+        <span>累計獲得宝箱:</span>
+        <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0個</span>
       </div>
       <button id="reload-treasure-btn">🔍 周辺の宝箱を検索</button>
       <div style="font-size:9px; color:#777; line-height:1.35;">※ 宝箱の近くでマークをタップして開けます</div>
@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.8</div>
+    <div id="app-version">v1.0.9</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -499,7 +499,7 @@
 
     function updateTreasureUI() {
       const openedCount = treasureList.filter(t => t.opened).length;
-      document.getElementById('treasure-count').innerText = `🎁 ${openedCount} / ${treasureList.length}個`;
+      document.getElementById('treasure-count').innerText = `🎁 ${openedCount}個`;
     }
 
     async function fetchDeadEndTreasures(lat, lng) {
