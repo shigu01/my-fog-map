@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.6</div>
+    <div id="app-version">v1.0.7</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -250,7 +250,7 @@
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
     const TREASURE_SEARCH_RADIUS_METERS = 400;
     const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS = 60;
-    const TREASURE_ALGORITHM_VERSION = 'dead-end-v4';
+    const TREASURE_ALGORITHM_VERSION = 'dead-end-v5';
 
     // Overpass APIのミラーサーバー群
     const OVERPASS_ENDPOINTS = [
@@ -507,7 +507,7 @@
 
       const radius = TREASURE_SEARCH_RADIUS_METERS;
       const query = `
-        [out:json][timeout:10];
+        [out:json][timeout:15];
         (
           way["highway"~"residential|service|footway|path|living_street"](around:${radius},${lat},${lng});
         );
@@ -536,10 +536,7 @@
       }
 
       if (!data || !data.elements) {
-        // 行き止まり判定の根拠となる道路データがない場合、
-        // 適当な場所へ宝箱を生成すると今回の仕様を破ってしまうため、
-        // 新しい宝箱は追加しない。
-        console.warn("道路データを取得できなかったため、今回は宝箱を追加しません");
+        console.warn('道路データを取得できなかったため、今回は宝箱を追加しません');
         showNotification('⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした');
         isFetchingTreasures = false;
         return;
@@ -547,124 +544,114 @@
 
       try {
         const nodes = {};
-        const adjacency = {};
-        const segments = [];
+        const ways = [];
 
-        // 先に全nodeを登録する。Overpassのelements順序に依存しないよう二段階で解析する。
         data.elements.forEach(el => {
           if (el.type === 'node' && Number.isFinite(el.lat) && Number.isFinite(el.lon)) {
             nodes[el.id] = { lat: el.lat, lng: el.lon };
           }
         });
 
-        // 次にwayを道路グラフへ変換する。
         data.elements.forEach(el => {
-          if (el.type !== 'way' || !Array.isArray(el.nodes) || el.nodes.length < 2) return;
-
-          for (let i = 0; i < el.nodes.length - 1; i++) {
-            const a = el.nodes[i];
-            const b = el.nodes[i + 1];
-            if (a === b || !nodes[a] || !nodes[b]) continue;
-
-            if (!adjacency[a]) adjacency[a] = new Set();
-            if (!adjacency[b]) adjacency[b] = new Set();
-            adjacency[a].add(b);
-            adjacency[b].add(a);
-
-            segments.push({
-              a,
-              b,
-              aLat: nodes[a].lat,
-              aLng: nodes[a].lng,
-              bLat: nodes[b].lat,
-              bLng: nodes[b].lng
-            });
+          if (el.type === 'way' && Array.isArray(el.nodes) && el.nodes.length >= 2) {
+            const validNodes = el.nodes.filter(id => nodes[id]);
+            if (validNodes.length >= 2) ways.push(validNodes);
           }
         });
 
-        // 候補地点から道路線分までの最短距離をメートルで求める。
-        function pointToSegmentDistanceMeters(pointLat, pointLng, seg) {
-          const lat0 = pointLat * Math.PI / 180;
-          const mPerDegLat = 111320;
-          const mPerDegLng = 111320 * Math.cos(lat0);
+        // OSMでは同じ交差点・接続部でも、道路ごとに別nodeへ分割されることがあります。
+        // そのため「nodeの接続数」だけではT字路/Y字路/行き止まりを正しく判定できません。
+        // 近接nodeを小さなクラスタにまとめ、クラスタ間の接続数で判定します。
+        const CLUSTER_RADIUS_METERS = 4;
+        const clusterList = [];
+        const nodeToCluster = {};
 
-          const ax = (seg.aLng - pointLng) * mPerDegLng;
-          const ay = (seg.aLat - pointLat) * mPerDegLat;
-          const bx = (seg.bLng - pointLng) * mPerDegLng;
-          const by = (seg.bLat - pointLat) * mPerDegLat;
+        for (const [id, node] of Object.entries(nodes)) {
+          let assigned = -1;
+          for (let i = 0; i < clusterList.length; i++) {
+            if (calculateDistance(node.lat, node.lng, clusterList[i].lat, clusterList[i].lng) <= CLUSTER_RADIUS_METERS) {
+              assigned = i;
+              break;
+            }
+          }
 
-          const abx = bx - ax;
-          const aby = by - ay;
-          const ab2 = abx * abx + aby * aby;
-          if (ab2 === 0) return Math.hypot(ax, ay);
+          if (assigned === -1) {
+            assigned = clusterList.length;
+            clusterList.push({ lat: node.lat, lng: node.lng, members: [] });
+          }
 
-          let t = (-ax * abx + -ay * aby) / ab2;
-          t = Math.max(0, Math.min(1, t));
-
-          const cx = ax + t * abx;
-          const cy = ay + t * aby;
-          return Math.hypot(cx, cy);
+          clusterList[assigned].members.push(id);
+          // メンバー追加後、代表点を平均位置へ更新
+          const members = clusterList[assigned].members;
+          let sumLat = 0;
+          let sumLng = 0;
+          for (const memberId of members) {
+            sumLat += nodes[memberId].lat;
+            sumLng += nodes[memberId].lng;
+          }
+          clusterList[assigned].lat = sumLat / members.length;
+          clusterList[assigned].lng = sumLng / members.length;
+          nodeToCluster[id] = assigned;
         }
 
-        // OSM上でnodeが分割されている交差・接続を吸収するための許容距離。
-        // 20mでは、別の道路が近くを並走するだけでも本当の行き止まりを
-        // 誤って除外してしまうため、実際の道路接続に近い8mまで絞る。
-        const ROAD_CONNECTION_TOLERANCE_METERS = 8;
+        const clusterAdjacency = clusterList.map(() => new Set());
+
+        for (const way of ways) {
+          for (let i = 0; i < way.length - 1; i++) {
+            const aCluster = nodeToCluster[way[i]];
+            const bCluster = nodeToCluster[way[i + 1]];
+            if (aCluster === undefined || bCluster === undefined || aCluster === bCluster) continue;
+            clusterAdjacency[aCluster].add(bCluster);
+            clusterAdjacency[bCluster].add(aCluster);
+          }
+        }
+
+        // 検索端の切れた道路を行き止まりと誤認しないようにする。
+        const searchRadius = radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
         const deadEndCandidates = [];
 
-        Object.keys(adjacency).forEach(id => {
-          // グラフ上で接続先が1つのノードだけが一次候補。
-          if (adjacency[id].size !== 1 || !nodes[id]) return;
+        clusterList.forEach((cluster, clusterId) => {
+          const neighbors = clusterAdjacency[clusterId];
+          if (neighbors.size !== 1) return;
 
-          const candidate = {
-            id,
-            lat: nodes[id].lat,
-            lng: nodes[id].lng
-          };
+          const distanceFromSearchCenter = calculateDistance(lat, lng, cluster.lat, cluster.lng);
+          if (distanceFromSearchCenter > searchRadius) return;
 
-          const distanceFromSearchCenter = calculateDistance(lat, lng, candidate.lat, candidate.lng);
-          if (distanceFromSearchCenter > radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS) return;
+          const neighborId = [...neighbors][0];
+          const neighbor = clusterList[neighborId];
 
-          // 交差点や接続道路がOSM上で別node/別wayになっているケースを除外する。
-          // 候補終端自身につながる1本の線分は無視し、それ以外の道路が20m以内なら不採用。
-          let nearOtherRoad = false;
-          for (const seg of segments) {
-            if (seg.a === id || seg.b === id) continue;
-            if (pointToSegmentDistanceMeters(candidate.lat, candidate.lng, seg) <= ROAD_CONNECTION_TOLERANCE_METERS) {
-              nearOtherRoad = true;
-              break;
+          // 代表点が近接node平均で道路の少し内側へ寄ることがあるため、
+          // クラスタ内で「隣接クラスタから最も遠いnode」を行き止まり位置として採用。
+          let bestNode = { ...cluster };
+          let bestDistance = -1;
+          for (const memberId of cluster.members) {
+            const node = nodes[memberId];
+            const d = calculateDistance(node.lat, node.lng, neighbor.lat, neighbor.lng);
+            if (d > bestDistance) {
+              bestDistance = d;
+              bestNode = node;
             }
           }
-          if (nearOtherRoad) return;
 
-          // node自体が分離されていても、20m以内に接続済みnodeがあれば交差・接続部とみなす。
-          for (const otherId of Object.keys(adjacency)) {
-            if (otherId === id) continue;
-            const other = nodes[otherId];
-            if (!other) continue;
-            if (calculateDistance(candidate.lat, candidate.lng, other.lat, other.lng) <= ROAD_CONNECTION_TOLERANCE_METERS) {
-              nearOtherRoad = true;
-              break;
-            }
-          }
-          if (nearOtherRoad) return;
-
-          deadEndCandidates.push(candidate);
+          deadEndCandidates.push({
+            id: `cluster_${clusterId}`,
+            lat: bestNode.lat,
+            lng: bestNode.lng
+          });
         });
 
-        // 同じ行き止まりに複数の終端nodeがある場合は1個にまとめる。
+        // 同一行き止まりを複数回拾った場合は1個にまとめる。
         const uniqueDeadEnds = [];
         for (const candidate of deadEndCandidates) {
-          if (!uniqueDeadEnds.some(c => calculateDistance(c.lat, c.lng, candidate.lat, candidate.lng) < 25)) {
+          if (!uniqueDeadEnds.some(c => calculateDistance(c.lat, c.lng, candidate.lat, candidate.lng) < 15)) {
             uniqueDeadEnds.push(candidate);
           }
         }
 
-        // 今回の検索範囲内にある既存宝箱は、今回も行き止まりと判定された場所だけ残す。
-        const searchRadius = radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
+        // 今回の検索範囲内にある既存宝箱は、今回も行き止まりとして検出された場所だけ残す。
         const filteredTreasures = treasureList.filter(t => {
           if (calculateDistance(lat, lng, t.lat, t.lng) > searchRadius) return true;
-          return uniqueDeadEnds.some(c => calculateDistance(t.lat, t.lng, c.lat, c.lng) < 35);
+          return uniqueDeadEnds.some(c => calculateDistance(t.lat, t.lng, c.lat, c.lng) < 20);
         });
 
         const keptIds = new Set(filteredTreasures.map(t => t.id));
@@ -678,7 +665,7 @@
 
         let newAddedCount = 0;
         for (const candidate of uniqueDeadEnds) {
-          const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, candidate.lat, candidate.lng) < 20);
+          const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, candidate.lat, candidate.lng) < 15);
           if (!exists) {
             treasureList.push({
               id: 'tr_' + candidate.id,
@@ -703,7 +690,7 @@
 
         renderTreasures();
       } catch (err) {
-        console.error("解析エラー:", err);
+        console.error('解析エラー:', err);
         showNotification('⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした');
       } finally {
         isFetchingTreasures = false;
