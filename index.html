@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.5</div>
+    <div id="app-version">v1.0.6</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -250,7 +250,7 @@
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
     const TREASURE_SEARCH_RADIUS_METERS = 400;
     const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS = 60;
-    const TREASURE_ALGORITHM_VERSION = 'dead-end-v3';
+    const TREASURE_ALGORITHM_VERSION = 'dead-end-v4';
 
     // Overpass APIのミラーサーバー群
     const OVERPASS_ENDPOINTS = [
@@ -312,8 +312,8 @@
       const savedTreasures = localStorage.getItem(STORAGE_KEY_TREASURES);
 
       // 以前の宝箱判定は「wayの中で1回だけ現れるノード」を行き止まり扱いしていたため、
-      // 普通の道の途中にも大量の宝箱が保存されています。今回のアルゴリズムでは
-      // 既存データを安全に引き継げないため、初回だけ宝箱配置をリセットします。
+      // 普通の道の途中にも大量の宝箱が保存されています。新しい判定結果と一致しない古い宝箱を安全に引き継げないため、アルゴリズム変更時は
+      // 宝箱配置を一度リセットします。
       if (savedTreasureAlgorithmVersion !== TREASURE_ALGORITHM_VERSION) {
         treasureList = [];
         localStorage.removeItem(STORAGE_KEY_TREASURES);
@@ -606,7 +606,10 @@
           return Math.hypot(cx, cy);
         }
 
-        const ROAD_CONNECTION_TOLERANCE_METERS = 20;
+        // OSM上でnodeが分割されている交差・接続を吸収するための許容距離。
+        // 20mでは、別の道路が近くを並走するだけでも本当の行き止まりを
+        // 誤って除外してしまうため、実際の道路接続に近い8mまで絞る。
+        const ROAD_CONNECTION_TOLERANCE_METERS = 8;
         const deadEndCandidates = [];
 
         Object.keys(adjacency).forEach(id => {
