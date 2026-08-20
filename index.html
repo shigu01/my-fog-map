@@ -228,7 +228,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.3</div>
+    <div id="app-version">v1.0.4</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -248,6 +248,9 @@
     const TREASURE_TAP_MAX_ACCURACY_METERS = 20; // タップで開けるために必要なGPS精度
     const TREASURE_TAP_POSITION_MAX_AGE_MS = 10000; // GPS位置情報の最大経過時間(10秒)
     const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
+    const TREASURE_SEARCH_RADIUS_METERS = 400;
+    const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS = 60;
+    const TREASURE_ALGORITHM_VERSION = 'dead-end-v2';
 
     // Overpass APIのミラーサーバー群
     const OVERPASS_ENDPOINTS = [
@@ -305,14 +308,23 @@
         document.getElementById('opacity-val').innerText = `${savedOpacity}%`;
       }
 
+      const savedTreasureAlgorithmVersion = localStorage.getItem('fog_treasure_algorithm_version');
       const savedTreasures = localStorage.getItem(STORAGE_KEY_TREASURES);
-      if (savedTreasures) {
+
+      // 以前の宝箱判定は「wayの中で1回だけ現れるノード」を行き止まり扱いしていたため、
+      // 普通の道の途中にも大量の宝箱が保存されています。今回のアルゴリズムでは
+      // 既存データを安全に引き継げないため、初回だけ宝箱配置をリセットします。
+      if (savedTreasureAlgorithmVersion !== TREASURE_ALGORITHM_VERSION) {
+        treasureList = [];
+        localStorage.removeItem(STORAGE_KEY_TREASURES);
+        localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
+      } else if (savedTreasures) {
         try { 
           const parsed = JSON.parse(savedTreasures);
           // 破損データを除外して復元
           treasureList = parsed.filter(t => typeof t.lat === 'number' && typeof t.lng === 'number' && !isNaN(t.lat) && !isNaN(t.lng));
         } catch (e) { 
-          treasureList = []; 
+          treasureList = [];
         }
       }
     }
@@ -493,7 +505,7 @@
 
       showNotification('🔍 周辺の宝箱を検索中...');
 
-      const radius = 300;
+      const radius = TREASURE_SEARCH_RADIUS_METERS;
       const query = `
         [out:json][timeout:10];
         (
@@ -524,92 +536,108 @@
       }
 
       if (!data || !data.elements) {
-        console.warn("API取得失敗のため、オフライン救済モードで宝箱を生成します");
-        generateFallbackTreasures(lat, lng);
+        // 行き止まり判定の根拠となる道路データがない場合、
+        // 適当な場所へ宝箱を生成すると今回の仕様を破ってしまうため、
+        // 新しい宝箱は追加しない。
+        console.warn("道路データを取得できなかったため、今回は宝箱を追加しません");
+        showNotification('⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした');
         isFetchingTreasures = false;
         return;
       }
 
       try {
-        const nodeCounts = {};
         const nodes = {};
+        const adjacency = {};
 
         data.elements.forEach(el => {
           if (el.type === 'node') {
             // Overpass API の経度キーは lon
             nodes[el.id] = { lat: el.lat, lng: el.lon };
-          } else if (el.type === 'way') {
-            el.nodes.forEach(id => {
-              nodeCounts[id] = (nodeCounts[id] || 0) + 1;
-            });
+          } else if (el.type === 'way' && Array.isArray(el.nodes)) {
+            // 道路を「ノード同士の接続」としてグラフ化する。
+            // 以前は「wayの中で1回しか出てこないノード」を行き止まり扱いしていたため、
+            // OSM側で道が分割されているだけの普通の道の途中にも宝箱が置かれていました。
+            for (let i = 0; i < el.nodes.length - 1; i++) {
+              const a = el.nodes[i];
+              const b = el.nodes[i + 1];
+              if (a === b) continue;
+              if (!adjacency[a]) adjacency[a] = new Set();
+              if (!adjacency[b]) adjacency[b] = new Set();
+              adjacency[a].add(b);
+              adjacency[b].add(a);
+            }
           }
         });
 
-        let newAddedCount = 0;
-        for (const id in nodeCounts) {
-          if (nodeCounts[id] === 1 && nodes[id]) {
-            const node = nodes[id];
-            const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, node.lat, node.lng) < 20);
-            if (!exists) {
-              treasureList.push({
-                id: 'tr_' + id,
-                lat: node.lat,
-                lng: node.lng,
-                opened: false
+        // 接続先が1つしかないノードだけを「真の行き止まり」として採用する。
+        // 交差点は3方向以上、道の途中は2方向以上になるため除外される。
+        const deadEndCandidates = [];
+        Object.keys(adjacency).forEach(id => {
+          const degree = adjacency[id].size;
+          if (degree === 1 && nodes[id]) {
+            const distanceFromSearchCenter = calculateDistance(lat, lng, nodes[id].lat, nodes[id].lng);
+            // 検索範囲の端では、道路が範囲外へ続いていても「行き止まり」に見えるため除外する。
+            if (distanceFromSearchCenter <= radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS) {
+              deadEndCandidates.push({
+                id,
+                lat: nodes[id].lat,
+                lng: nodes[id].lng
               });
-              newAddedCount++;
             }
+          }
+        });
+
+        // 今回検索した範囲内にある既存宝箱のうち、今回の「行き止まり」判定に
+        // 該当しなくなったものは削除する。開封済み情報は、同じ行き止まりとして
+        // 残った宝箱に対してだけ維持される。
+        const searchRadius = 300;
+        const filteredTreasures = treasureList.filter(t => {
+          if (calculateDistance(lat, lng, t.lat, t.lng) > searchRadius) return true;
+          return deadEndCandidates.some(c => calculateDistance(t.lat, t.lng, c.lat, c.lng) < 35);
+        });
+
+        // 地図上に既に表示されているが、新しい判定で削除された宝箱も同時に消す。
+        const keptIds = new Set(filteredTreasures.map(t => t.id));
+        Object.keys(treasureMarkers).forEach(id => {
+          if (!keptIds.has(id)) {
+            map.removeLayer(treasureMarkers[id]);
+            delete treasureMarkers[id];
+          }
+        });
+        treasureList = filteredTreasures;
+
+        let newAddedCount = 0;
+        for (const candidate of deadEndCandidates) {
+          const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, candidate.lat, candidate.lng) < 20);
+          if (!exists) {
+            treasureList.push({
+              id: 'tr_' + candidate.id,
+              lat: candidate.lat,
+              lng: candidate.lng,
+              opened: false
+            });
+            newAddedCount++;
           }
         }
 
+        localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+        localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
+
         if (newAddedCount > 0) {
-          localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
-          showNotification(`🎁 新しく宝箱を ${newAddedCount} 個発見！`);
+          showNotification(`🎁 行き止まりに宝箱を ${newAddedCount} 個発見！`);
+        } else if (deadEndCandidates.length === 0) {
+          showNotification('🔍 この周辺に行き止まりは見つかりませんでした');
         } else {
-          generateFallbackTreasures(lat, lng);
+          showNotification(`🔍 行き止まりを ${deadEndCandidates.length} 箇所確認しました`);
         }
 
         renderTreasures();
       } catch (err) {
         console.error("解析エラー:", err);
-        generateFallbackTreasures(lat, lng);
+        showNotification('⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした');
       } finally {
         isFetchingTreasures = false;
       }
-    }
-
-    function generateFallbackTreasures(lat, lng) {
-      let added = 0;
-      const offsets = [
-        { dLat: 0.0012, dLng: 0.0010 },
-        { dLat: -0.0010, dLng: 0.0015 },
-        { dLat: 0.0015, dLng: -0.0012 },
-        { dLat: -0.0014, dLng: -0.0011 }
-      ];
-
-      offsets.forEach((off, idx) => {
-        const tLat = lat + off.dLat;
-        const tLng = lng + off.dLng;
-        const id = `fb_${Math.floor(lat * 1000)}_${Math.floor(lng * 1000)}_${idx}`;
-        const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, tLat, tLng) < 25);
-        if (!exists) {
-          treasureList.push({
-            id: id,
-            lat: tLat,
-            lng: tLng,
-            opened: false
-          });
-          added++;
-        }
-      });
-
-      if (added > 0) {
-        localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
-        showNotification(`🎁 周辺に宝箱を ${added} 個配置しました`);
-      } else {
-        showNotification(`周辺の宝箱は配置済みです`);
-      }
-      renderTreasures();
     }
 
     function tryOpenTreasure(treasureId) {
@@ -651,6 +679,7 @@
 
       treasure.opened = true;
       localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+      localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
       showNotification('🎁 宝箱を開けました！');
       renderTreasures();
     }
