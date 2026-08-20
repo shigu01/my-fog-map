@@ -218,7 +218,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.0</div>
+    <div id="app-version">v1.0.1</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -404,11 +404,12 @@
     map.on('tileload tileloadstart', () => requestDrawFog());
     requestDrawFog();
 
-    // 現在地マーカーはGPSから受け取った座標だけで更新する。
-    // 地図のzoom/move/rotate時にsetLatLng()や内部の_update()を呼ぶと、
-    // Leaflet Rotateの一時的な座標変換と競合してマーカーが画面に追従して
-    // しまうことがあるため、地図操作中はマーカーを手動で再配置しない。
-    function updateUserMarker() {
+    // 地図操作中は現在地マーカーを一時的に非表示にし、
+    // 操作終了後に現在のGPS座標へ再同期する。
+    let isMapManipulating = false;
+    let mapManipulationTimer = null;
+
+    function updateUserMarker(forceShow = false) {
       if (!currentLatLng) return;
 
       if (!userMarker) {
@@ -423,7 +424,38 @@
       } else {
         userMarker.setLatLng(currentLatLng);
       }
+
+      if (forceShow || !isMapManipulating) {
+        userMarker.setStyle({ fillOpacity: 1, opacity: 1 });
+      } else {
+        userMarker.setStyle({ fillOpacity: 0, opacity: 0 });
+      }
     }
+
+    function hideUserMarkerForMapOperation() {
+      isMapManipulating = true;
+      if (mapManipulationTimer) {
+        clearTimeout(mapManipulationTimer);
+        mapManipulationTimer = null;
+      }
+      if (userMarker) {
+        userMarker.setStyle({ fillOpacity: 0, opacity: 0 });
+      }
+    }
+
+    function restoreUserMarkerAfterMapOperation() {
+      if (mapManipulationTimer) clearTimeout(mapManipulationTimer);
+      mapManipulationTimer = setTimeout(() => {
+        isMapManipulating = false;
+        // 地図操作が完全に終わってから、現在のGPS座標で一度だけ再配置する。
+        updateUserMarker(true);
+      }, 120);
+    }
+
+    // Leaflet Rotateでは操作中に複数のイベントが発生するため、
+    // 開始時は非表示、終了時だけ再表示する。
+    map.on('movestart zoomstart rotatestart', hideUserMarkerForMapOperation);
+    map.on('moveend zoomend rotateend', restoreUserMarkerAfterMapOperation);
 
     if (visitedPoints.length > 0) {
       const last = visitedPoints[visitedPoints.length - 1];
