@@ -1,3298 +1,2528 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>白地図アプリ</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>白地図アプリ</title>
 
-  <!-- PWA / iOS ホーム画面追加設定 -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#ffffff">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="白地図アプリ">
-  <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="白地図アプリ">
+<link rel="apple-touch-icon" href="icon-192.png">
 
-  <!-- Leaflet の CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
-  <style>
-    html, body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #000;
-    }
-    
-    #map-container {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
+<style>
+html,body{
+  width:100%;
+  height:100%;
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#000;
+}
 
-    #map {
-      width: 100%;
-      height: 100%;
-    }
+#map-container{
+  position:relative;
+  width:100%;
+  height:100%;
+}
 
-    /* アプリバージョン表示 */
-    #app-version {
-      position: absolute;
-      bottom: 6px;
-      left: 8px;
-      z-index: 1001;
-      padding: 2px 5px;
-      border-radius: 4px;
-      background: rgba(255, 255, 255, 0.78);
-      color: #666;
-      font-size: 9px;
-      font-family: sans-serif;
-      line-height: 1.2;
-      pointer-events: none;
-      user-select: none;
-    }
+#map{
+  width:100%;
+  height:100%;
+}
 
-    #fog-canvas {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 500;
-      pointer-events: none;
-    }
+#app-version{
+  position:absolute;
+  bottom:6px;
+  left:8px;
+  z-index:1001;
+  padding:2px 5px;
+  border-radius:4px;
+  background:rgba(255,255,255,.78);
+  color:#666;
+  font-size:9px;
+  font-family:sans-serif;
+  line-height:1.2;
+  pointer-events:none;
+  user-select:none;
+}
 
-    /* コントロールパネル */
-    #controls {
-      position: absolute;
-      top: 12px;
-      left: 12px;
-      z-index: 1000;
-      background: rgba(255, 255, 255, 0.92);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 11px;
-      color: #333;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
+#fog-canvas{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  z-index:500;
+  pointer-events:none;
+}
 
-    #status {
-      font-size: 10px;
-      color: #555;
-      font-weight: normal;
-      max-width: 180px;
-      word-wrap: break-word;
-    }
+#controls{
+  position:absolute;
+  top:12px;
+  left:12px;
+  z-index:1000;
+  background:rgba(255,255,255,.92);
+  padding:8px 12px;
+  border-radius:8px;
+  font-size:11px;
+  color:#333;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
+  font-family:sans-serif;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
 
-    .control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      font-size: 11px;
-      color: #444;
-    }
+#status{
+  font-size:10px;
+  color:#555;
+  font-weight:normal;
+  max-width:180px;
+  word-wrap:break-word;
+}
 
-    .control-row input[type="range"] {
-      width: 80px;
-      cursor: pointer;
-    }
+.control-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  font-size:11px;
+  color:#444;
+}
 
-    .switch-label {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
+.control-row input[type="range"]{
+  width:80px;
+  cursor:pointer;
+}
 
-    .wakelock-status {
-      font-size: 9px;
-      padding: 1px 4px;
-      border-radius: 3px;
-      font-weight: bold;
-    }
+.switch-label{
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
 
-    .status-on {
-      background: #e3f9e5;
-      color: #1f9d55;
-    }
+.wakelock-status{
+  font-size:9px;
+  padding:1px 4px;
+  border-radius:3px;
+  font-weight:bold;
+}
 
-    .status-off {
-      background: #f1f3f5;
-      color: #868e96;
-    }
+.status-on{
+  background:#e3f9e5;
+  color:#1f9d55;
+}
 
-    #reload-treasure-btn {
-      margin-top: 2px;
-      padding: 4px 8px;
-      font-size: 10px;
-      background: #3498db;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
+.status-off{
+  background:#f1f3f5;
+  color:#868e96;
+}
 
-    #reload-treasure-btn:active {
-      background: #2980b9;
-    }
+#reload-treasure-btn{
+  margin-top:2px;
+  padding:4px 8px;
+  font-size:10px;
+  background:#3498db;
+  color:#fff;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
+}
 
-    #locate-btn {
-      position: absolute;
-      bottom: 24px;
-      right: 24px;
-      z-index: 1000;
-      background: #ffffff;
-      border: none;
-      border-radius: 50%;
-      width: 48px;
-      height: 48px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-    }
+#reload-treasure-btn:active{
+  background:#2980b9;
+}
 
-    #locate-btn:active {
-      transform: scale(0.92);
-      background-color: #f0f0f0;
-    }
+#locate-btn{
+  position:absolute;
+  bottom:24px;
+  right:24px;
+  z-index:1000;
+  background:#fff;
+  border:none;
+  border-radius:50%;
+  width:48px;
+  height:48px;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:20px;
+}
 
-    /* --- 宝箱スタイル & 通知ポップアップ --- */
-    .treasure-marker {
-      font-size: 26px;
-      text-align: center;
-      line-height: 1;
-      filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.6));
-      pointer-events: auto;
-      cursor: pointer;
-    }
+#locate-btn:active{
+  transform:scale(.92);
+  background:#f0f0f0;
+}
 
-    .treasure-marker.opened {
-      font-size: 20px;
-      opacity: 0.7;
-    }
+.treasure-marker{
+  font-size:26px;
+  text-align:center;
+  line-height:1;
+  filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));
+  pointer-events:auto;
+  cursor:pointer;
+}
 
-    .user-location-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #e74c3c;
-      border: 2px solid #fff;
-      box-shadow: 0 0 2px rgba(0,0,0,0.5);
-      box-sizing: border-box;
-    }
+.treasure-marker.opened{
+  font-size:20px;
+  opacity:.7;
+}
 
-    #notification {
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 2000;
-      background: rgba(0, 0, 0, 0.85);
-      color: #fff;
-      padding: 10px 18px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: bold;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-      display: none;
-      pointer-events: none;
-      white-space: nowrap;
-    }
-  </style>
+.user-location-dot{
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#e74c3c;
+  border:2px solid #fff;
+  box-shadow:0 0 2px rgba(0,0,0,.5);
+  box-sizing:border-box;
+}
+
+#notification{
+  position:absolute;
+  top:60px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:2000;
+  background:rgba(0,0,0,.85);
+  color:#fff;
+  padding:10px 18px;
+  border-radius:20px;
+  font-size:13px;
+  font-weight:bold;
+  box-shadow:0 4px 15px rgba(0,0,0,.4);
+  display:none;
+  pointer-events:none;
+  white-space:nowrap;
+}
+</style>
 </head>
 
 <body>
+<div id="map-container">
 
-  <div id="map-container">
-
-    <!-- 画面通知 -->
-    <div id="notification"></div>
+<div id="notification"></div>
 
-    <div id="controls">
+<div id="controls">
 
-      <div id="status">
-        位置情報を取得中...
-      </div>
+<div id="status">位置情報を取得中...</div>
 
-      <div class="control-row">
-        <label for="opacity-slider">
-          霧の濃さ:
-          <span id="opacity-val">100%</span>
-        </label>
-
-        <input
-          type="range"
-          id="opacity-slider"
-          min="50"
-          max="100"
-          value="100"
-        >
-      </div>
+<div class="control-row">
+<label for="opacity-slider">
+霧の濃さ:
+<span id="opacity-val">100%</span>
+</label>
+<input type="range" id="opacity-slider" min="50" max="100" value="100">
+</div>
 
-      <div class="control-row">
+<div class="control-row">
+<span>画面常時点灯:</span>
+<label class="switch-label">
+<input type="checkbox" id="wakelock-toggle">
+<span id="wakelock-badge" class="wakelock-status status-off">OFF</span>
+</label>
+</div>
 
-        <span>画面常時点灯:</span>
+<div
+class="control-row"
+style="border-top:1px solid #ddd;padding-top:4px;margin-top:2px;"
+>
+<span>累計獲得宝箱:</span>
+<span id="treasure-count" style="font-weight:bold;color:#d35400;">
+🎁 0個
+</span>
+</div>
 
-        <label class="switch-label">
+<div class="control-row">
+<span>ジェム:</span>
+<span id="gem-count" style="font-weight:bold;color:#6c5ce7;">
+💎 0個
+</span>
+</div>
 
-          <input
-            type="checkbox"
-            id="wakelock-toggle"
-          >
+<button id="reload-treasure-btn">
+🔍 周辺の宝箱を検索
+</button>
 
-          <span
-            id="wakelock-badge"
-            class="wakelock-status status-off"
-          >
-            OFF
-          </span>
+<div style="font-size:9px;color:#777;line-height:1.35;">
+※ 宝箱の近くでマークをタップして開けます
+</div>
 
-        </label>
+<div
+id="treasure-debug"
+style="font-size:9px;color:#888;line-height:1.35;"
+>
+宝箱データ: 0 / 表示中: 0
+</div>
 
-      </div>
+</div>
 
-      <!-- 宝箱獲得数表示と手動取得ボタン -->
+<div id="map"></div>
 
-      <div
-        class="control-row"
-        style="border-top: 1px solid #ddd; padding-top: 4px; margin-top:2px;"
-      >
-        <span>
-          累計獲得宝箱:
-        </span>
+<canvas id="fog-canvas"></canvas>
 
-        <span
-          id="treasure-count"
-          style="font-weight: bold; color: #d35400;"
-        >
-          🎁 0個
-        </span>
-      </div>
+<div id="app-version">v1.1.4</div>
 
-      <div class="control-row">
+<button id="locate-btn" title="現在地に移動">🎯</button>
 
-        <span>
-          ジェム:
-        </span>
+</div>
 
-        <span
-          id="gem-count"
-          style="font-weight: bold; color: #6c5ce7;"
-        >
-          💎 0個
-        </span>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 
-      </div>
+<script>
+const STORAGE_KEY_POINTS='fog_visited_points';
+const STORAGE_KEY_OPACITY='fog_opacity_value';
+const STORAGE_KEY_TREASURES='fog_treasures_data';
+const STORAGE_KEY_GEMS='fog_gems';
+const STORAGE_KEY_OPENED_TREASURES='fog_opened_treasure_count';
 
-      <button id="reload-treasure-btn">
-        🔍 周辺の宝箱を検索
-      </button>
+const UNFOG_RADIUS_METERS=50;
+const MIN_RECORD_DISTANCE_METERS=5;
 
-      <div
-        style="font-size:9px; color:#777; line-height:1.35;"
-      >
-        ※ 宝箱の近くでマークをタップして開けます
-      </div>
+const TREASURE_GET_RADIUS_METERS=25;
+const TREASURE_TAP_MAX_ACCURACY_METERS=20;
+const TREASURE_TAP_POSITION_MAX_AGE_MS=10000;
 
-      <div
-        id="treasure-debug"
-        style="font-size:9px; color:#888; line-height:1.35;"
-      >
-        宝箱データ: 0 / 表示中: 0
-      </div>
+const REFETCH_TREASURE_DISTANCE=300;
 
-    </div>
+const TREASURE_SEARCH_RADIUS_METERS=400;
+const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS=60;
 
-    <div id="map"></div>
+const TREASURE_ALGORITHM_VERSION='dead-end-v6';
 
-    <canvas id="fog-canvas"></canvas>
+const APP_VERSION='v1.1.4';
 
-    <div id="app-version">
-      v1.1.3
-    </div>
+const NEAR_OTHER_WAY_METERS=6;
 
-    <button
-      id="locate-btn"
-      title="現在地に移動"
-    >
-      🎯
-    </button>
+/*
+ * 宝箱データは全件保存する。
+ * ただし、Leafletに同時に生成するDOM Markerは
+ * 現在の地図周辺だけに限定する。
+ */
+const TREASURE_RENDER_PADDING=0.15;
+const MAX_VISIBLE_TREASURE_MARKERS=250;
 
-  </div>
+const OVERPASS_ENDPOINTS=[
+'https://overpass-api.de/api/interpreter',
+'https://overpass.kumi.systems/api/interpreter',
+'https://overpass.private.coffee/api/interpreter'
+];
 
+let visitedPoints=[];
+let treasureList=[];
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+let gemCount=0;
+let openedTreasureCount=0;
 
-  <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+let treasureMarkers={};
 
+let isFetchingTreasures=false;
+let lastFetchedLatLng=null;
 
-  <script>
+let fogOpacity=1.0;
 
-    // ----------------------------------------------------
-    // 1. 定数と変数
-    // ----------------------------------------------------
+let currentLatLng=null;
+let userMarker=null;
 
-    const STORAGE_KEY_POINTS =
-      'fog_visited_points';
+let currentAccuracy=null;
+let currentPositionTimestamp=null;
 
-    const STORAGE_KEY_OPACITY =
-      'fog_opacity_value';
+let wakeLock=null;
+let watchId=null;
 
-    const STORAGE_KEY_TREASURES =
-      'fog_treasures_data';
+let isRenderPending=false;
 
-    const STORAGE_KEY_GEMS =
-      'fog_gems';
 
-    const STORAGE_KEY_OPENED_TREASURES =
-      'fog_opened_treasure_count';
+/* =========================
+   霧用グラデーション
+========================= */
 
+const STAMP_SIZE=128;
 
-    const UNFOG_RADIUS_METERS =
-      50;
+const stampCanvas=document.createElement('canvas');
+stampCanvas.width=STAMP_SIZE;
+stampCanvas.height=STAMP_SIZE;
 
-    const MIN_RECORD_DISTANCE_METERS =
-      5;
+const stampCtx=stampCanvas.getContext('2d');
 
-    const TREASURE_GET_RADIUS_METERS =
-      25;
+const grad=stampCtx.createRadialGradient(
+STAMP_SIZE/2,
+STAMP_SIZE/2,
+(STAMP_SIZE/2)*0.4,
+STAMP_SIZE/2,
+STAMP_SIZE/2,
+STAMP_SIZE/2
+);
 
-    const TREASURE_TAP_MAX_ACCURACY_METERS =
-      20;
+grad.addColorStop(0,'rgba(0,0,0,1)');
+grad.addColorStop(1,'rgba(0,0,0,0)');
 
-    const TREASURE_TAP_POSITION_MAX_AGE_MS =
-      10000;
+stampCtx.fillStyle=grad;
+stampCtx.beginPath();
+stampCtx.arc(
+STAMP_SIZE/2,
+STAMP_SIZE/2,
+STAMP_SIZE/2,
+0,
+Math.PI*2
+);
+stampCtx.fill();
 
-    const REFETCH_TREASURE_DISTANCE =
-      300;
 
-    const TREASURE_SEARCH_RADIUS_METERS =
-      400;
+/* =========================
+   保存データ復元
+========================= */
 
-    const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS =
-      60;
+function loadSavedData(){
 
-    const TREASURE_ALGORITHM_VERSION =
-      'dead-end-v6';
+const savedPoints=
+localStorage.getItem(STORAGE_KEY_POINTS);
 
-    const APP_VERSION =
-      'v1.1.3';
+if(savedPoints){
+try{
+visitedPoints=JSON.parse(savedPoints);
+}catch(e){
+visitedPoints=[];
+}
+}
 
-    /*
-     * 候補地点から別の道路way線分までが
-     * この距離以内なら、
-     * OSM上でnodeを共有していなくても
-     * 実質的な接続・交差点とみなして除外する。
-     */
+const savedOpacity=
+localStorage.getItem(STORAGE_KEY_OPACITY);
 
-    const NEAR_OTHER_WAY_METERS =
-      6;
+if(savedOpacity){
 
+fogOpacity=
+parseFloat(savedOpacity)/100;
 
-    const OVERPASS_ENDPOINTS = [
+document.getElementById('opacity-slider').value=
+savedOpacity;
 
-      'https://overpass-api.de/api/interpreter',
+document.getElementById('opacity-val').innerText=
+`${savedOpacity}%`;
 
-      'https://overpass.kumi.systems/api/interpreter',
+}
 
-      'https://overpass.private.coffee/api/interpreter'
+const savedGemCount=
+localStorage.getItem(STORAGE_KEY_GEMS);
 
-    ];
+if(savedGemCount!==null){
 
+const parsedGems=
+parseInt(savedGemCount,10);
 
-    let visitedPoints = [];
+gemCount=
+Number.isFinite(parsedGems)&&parsedGems>=0
+?parsedGems
+:0;
 
-    let treasureList = [];
+}
 
-    let gemCount = 0;
+const savedOpenedTreasureCount=
+localStorage.getItem(STORAGE_KEY_OPENED_TREASURES);
 
-    let openedTreasureCount = 0;
+if(savedOpenedTreasureCount!==null){
 
-    let treasureMarkers = {};
+const parsedOpened=
+parseInt(savedOpenedTreasureCount,10);
 
-    let isFetchingTreasures =
-      false;
+openedTreasureCount=
+Number.isFinite(parsedOpened)&&parsedOpened>=0
+?parsedOpened
+:0;
 
-    let lastFetchedLatLng =
-      null;
+}
 
+const savedTreasureAlgorithmVersion=
+localStorage.getItem(
+'fog_treasure_algorithm_version'
+);
 
-    let fogOpacity =
-      1.0;
+const savedTreasures=
+localStorage.getItem(
+STORAGE_KEY_TREASURES
+);
 
-    let currentLatLng =
-      null;
+/*
+ * 宝箱配置アルゴリズムが変わった場合のみ、
+ * 古い宝箱データをリセットする。
+ */
+if(
+savedTreasureAlgorithmVersion!==
+TREASURE_ALGORITHM_VERSION
+){
 
-    let userMarker =
-      null;
+treasureList=[];
 
-    let currentAccuracy =
-      null;
+localStorage.removeItem(
+STORAGE_KEY_TREASURES
+);
 
-    let currentPositionTimestamp =
-      null;
+localStorage.setItem(
+'fog_treasure_algorithm_version',
+TREASURE_ALGORITHM_VERSION
+);
 
+}else if(savedTreasures){
 
-    let wakeLock =
-      null;
+try{
 
-    let watchId =
-      null;
+const parsed=
+JSON.parse(savedTreasures);
 
-    let isRenderPending =
-      false;
+treasureList=
+parsed.filter(
+t=>
+typeof t.lat==='number'&&
+typeof t.lng==='number'&&
+!isNaN(t.lat)&&
+!isNaN(t.lng)
+);
 
+}catch(e){
 
-    // ----------------------------------------------------
-    // グラデーションスタンプ作成
-    // ----------------------------------------------------
+treasureList=[];
 
-    const STAMP_SIZE =
-      128;
+}
 
-    const stampCanvas =
-      document.createElement('canvas');
+}
 
-    stampCanvas.width =
-      STAMP_SIZE;
+if(savedOpenedTreasureCount===null){
 
-    stampCanvas.height =
-      STAMP_SIZE;
+openedTreasureCount=
+treasureList.filter(
+t=>t.opened
+).length;
 
-    const stampCtx =
-      stampCanvas.getContext('2d');
+localStorage.setItem(
+STORAGE_KEY_OPENED_TREASURES,
+String(openedTreasureCount)
+);
 
+}
 
-    const grad =
-      stampCtx.createRadialGradient(
+}
 
-        STAMP_SIZE / 2,
-        STAMP_SIZE / 2,
-        (STAMP_SIZE / 2) * 0.4,
+loadSavedData();
 
-        STAMP_SIZE / 2,
-        STAMP_SIZE / 2,
-        STAMP_SIZE / 2
 
-      );
+/* =========================
+   地図
+========================= */
 
+const map=L.map(
+'map',
+{
+zoomControl:false,
+rotate:true,
+touchRotate:true,
+rotateControl:{
+position:'topright',
+closeOnZeroBearing:false
+},
+bearing:0
+}
+).setView(
+[35.6812,139.7671],
+17
+);
 
-    grad.addColorStop(
-      0,
-      'rgba(0, 0, 0, 1)'
-    );
+L.tileLayer(
+'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+{
+maxZoom:19,
+attribution:'&copy; OpenStreetMap'
+}
+).addTo(map);
 
-    grad.addColorStop(
-      1,
-      'rgba(0, 0, 0, 0)'
-    );
 
+/* =========================
+   Leaflet Pane
+========================= */
 
-    stampCtx.fillStyle =
-      grad;
+map.createPane('treasurePane');
+map.getPane('treasurePane').style.zIndex=600;
 
-    stampCtx.beginPath();
+map.createPane('userPane');
+map.getPane('userPane').style.zIndex=700;
 
-    stampCtx.arc(
-      STAMP_SIZE / 2,
-      STAMP_SIZE / 2,
-      STAMP_SIZE / 2,
-      0,
-      Math.PI * 2
-    );
 
-    stampCtx.fill();
+/* =========================
+   霧Canvas
+========================= */
 
+const canvas=
+document.getElementById('fog-canvas');
 
-    // ----------------------------------------------------
-    // 2. ローカルストレージからの復元
-    // ----------------------------------------------------
+document
+.getElementById('map-container')
+.appendChild(canvas);
 
-    function loadSavedData() {
+const ctx=canvas.getContext('2d');
 
-      const savedPoints =
-        localStorage.getItem(
-          STORAGE_KEY_POINTS
-        );
+function resizeCanvas(){
+requestDrawFog();
+}
 
+window.addEventListener(
+'resize',
+resizeCanvas
+);
 
-      if (savedPoints) {
 
-        try {
+/* =========================
+   霧描画
+========================= */
 
-          visitedPoints =
-            JSON.parse(savedPoints);
+function drawFog(){
 
-        } catch (e) {
+const size=map.getSize();
 
-          visitedPoints = [];
+if(size.x===0||size.y===0)return;
 
-        }
+if(
+canvas.width!==size.x||
+canvas.height!==size.y
+){
 
-      }
+canvas.width=size.x;
+canvas.height=size.y;
 
+canvas.style.width=
+size.x+'px';
 
-      const savedOpacity =
-        localStorage.getItem(
-          STORAGE_KEY_OPACITY
-        );
+canvas.style.height=
+size.y+'px';
 
+}
 
-      if (savedOpacity) {
+ctx.clearRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
 
-        fogOpacity =
-          parseFloat(savedOpacity) / 100;
+ctx.fillStyle=
+`rgba(255,255,255,${fogOpacity})`;
 
-        document.getElementById(
-          'opacity-slider'
-        ).value =
-          savedOpacity;
+ctx.fillRect(
+0,
+0,
+canvas.width,
+canvas.height
+);
 
-        document.getElementById(
-          'opacity-val'
-        ).innerText =
-          `${savedOpacity}%`;
+ctx.globalCompositeOperation=
+'destination-out';
 
-      }
+const bounds=
+map.getBounds().pad(0.2);
 
+for(
+let i=0;
+i<visitedPoints.length;
+i++
+){
 
-      const savedGemCount =
-        localStorage.getItem(
-          STORAGE_KEY_GEMS
-        );
+const point=
+visitedPoints[i];
 
+if(
+!bounds.contains(
+[
+point.lat,
+point.lng
+]
+)
+)continue;
 
-      if (
-        savedGemCount !== null
-      ) {
+const containerPoint=
+map.latLngToContainerPoint(
+[
+point.lat,
+point.lng
+]
+);
 
-        const parsedGems =
-          parseInt(
-            savedGemCount,
-            10
-          );
+const edgeLatLng=
+L.latLng(
+point.lat,
+point.lng+
+(
+point.radius/
+111320
+)
+);
 
-        gemCount =
-          Number.isFinite(parsedGems) &&
-          parsedGems >= 0
-            ? parsedGems
-            : 0;
+const edgePoint=
+map.latLngToContainerPoint(
+edgeLatLng
+);
 
-      }
+const pixelRadius=
+Math.max(
+15,
+Math.abs(
+edgePoint.x-
+containerPoint.x
+)
+);
 
+const diameter=
+pixelRadius*2;
 
-      const savedOpenedTreasureCount =
-        localStorage.getItem(
-          STORAGE_KEY_OPENED_TREASURES
-        );
+ctx.drawImage(
+stampCanvas,
+containerPoint.x-pixelRadius,
+containerPoint.y-pixelRadius,
+diameter,
+diameter
+);
 
+}
 
-      if (
-        savedOpenedTreasureCount !== null
-      ) {
+ctx.globalCompositeOperation=
+'source-over';
 
-        const parsedOpened =
-          parseInt(
-            savedOpenedTreasureCount,
-            10
-          );
+}
 
-        openedTreasureCount =
-          Number.isFinite(parsedOpened) &&
-          parsedOpened >= 0
-            ? parsedOpened
-            : 0;
+function requestDrawFog(){
 
-      }
+if(!isRenderPending){
 
+isRenderPending=true;
 
-      const savedTreasureAlgorithmVersion =
-        localStorage.getItem(
-          'fog_treasure_algorithm_version'
-        );
+requestAnimationFrame(
+()=>{
+drawFog();
+isRenderPending=false;
+}
+);
 
+}
 
-      const savedTreasures =
-        localStorage.getItem(
-          STORAGE_KEY_TREASURES
-        );
+}
 
+map.on(
+'move zoom rotate viewreset resize load',
+requestDrawFog
+);
 
-      if (
-        savedTreasureAlgorithmVersion !==
-        TREASURE_ALGORITHM_VERSION
-      ) {
+map.whenReady(
+()=>requestDrawFog()
+);
 
-        treasureList = [];
+map.on(
+'tileload tileloadstart',
+()=>requestDrawFog()
+);
 
-        localStorage.removeItem(
-          STORAGE_KEY_TREASURES
-        );
+requestDrawFog();
 
-        localStorage.setItem(
-          'fog_treasure_algorithm_version',
-          TREASURE_ALGORITHM_VERSION
-        );
 
-      } else if (savedTreasures) {
+/* =========================
+   現在地マーカー
+========================= */
 
-        try {
+function updateUserMarker(){
 
-          const parsed =
-            JSON.parse(
-              savedTreasures
-            );
+if(!currentLatLng)return;
 
-          treasureList =
-            parsed.filter(
+if(!userMarker){
 
-              t =>
+const dotIcon=
+L.divIcon({
+className:'',
+html:'<div class="user-location-dot"></div>',
+iconSize:[16,16],
+iconAnchor:[8,8]
+});
 
-                typeof t.lat === 'number' &&
+userMarker=
+L.marker(
+currentLatLng,
+{
+icon:dotIcon,
+pane:'userPane',
+interactive:false
+}
+).addTo(map);
 
-                typeof t.lng === 'number' &&
+}else{
 
-                !isNaN(t.lat) &&
+userMarker.setLatLng(
+currentLatLng
+);
 
-                !isNaN(t.lng)
+}
 
-            );
+}
 
-        } catch (e) {
+if(visitedPoints.length>0){
 
-          treasureList = [];
+const last=
+visitedPoints[
+visitedPoints.length-1
+];
 
-        }
+map.setView(
+[
+last.lat,
+last.lng
+],
+17
+);
 
-      }
+}
 
 
-      if (
-        savedOpenedTreasureCount === null
-      ) {
+/* =========================
+   宝箱ID
+========================= */
 
-        openedTreasureCount =
-          treasureList.filter(
-            t => t.opened
-          ).length;
+function createTreasureId(
+lat,
+lng
+){
 
-        localStorage.setItem(
-          STORAGE_KEY_OPENED_TREASURES,
-          String(
-            openedTreasureCount
-          )
-        );
+const latKey=
+Math.round(lat*1000000);
 
-      }
+const lngKey=
+Math.round(lng*1000000);
 
-    }
+return `tr_${latKey}_${lngKey}`;
 
+}
 
-    loadSavedData();
 
+/* =========================
+   宝箱表示
+========================= */
 
-    // ----------------------------------------------------
-    // 3. 地図とCanvasの初期化
-    // ----------------------------------------------------
+function renderTreasures(){
 
-    const map =
-      L.map(
-        'map',
-        {
+/*
+ * 全宝箱データをそのままMarker化しない。
+ * 現在の地図表示範囲周辺だけを対象にする。
+ */
 
-          zoomControl:
-            false,
+const bounds=
+map
+.getBounds()
+.pad(
+TREASURE_RENDER_PADDING
+);
 
-          rotate:
-            true,
+const center=
+map.getCenter();
 
-          touchRotate:
-            true,
+let visibleTreasures=
+treasureList.filter(
+t=>
+Number.isFinite(t.lat)&&
+Number.isFinite(t.lng)&&
+bounds.contains(
+[
+t.lat,
+t.lng
+]
+)
+);
 
-          rotateControl:
-            {
 
-              position:
-                'topright',
+/*
+ * ズームアウトなどで表示候補が
+ * 250個を超えた場合は、
+ * 地図中心に近い宝箱を優先する。
+ */
 
-              closeOnZeroBearing:
-                false
+if(
+visibleTreasures.length>
+MAX_VISIBLE_TREASURE_MARKERS
+){
 
-            },
+visibleTreasures.sort(
+(a,b)=>{
 
-          bearing:
-            0
+const da=
+calculateDistance(
+center.lat,
+center.lng,
+a.lat,
+a.lng
+);
 
-        }
-      )
-      .setView(
-        [35.6812, 139.7671],
-        17
-      );
+const db=
+calculateDistance(
+center.lat,
+center.lng,
+b.lat,
+b.lng
+);
 
+return da-db;
 
-    L.tileLayer(
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {
+}
+);
 
-        maxZoom:
-          19,
+visibleTreasures=
+visibleTreasures.slice(
+0,
+MAX_VISIBLE_TREASURE_MARKERS
+);
 
-        attribution:
-          '&copy; OpenStreetMap'
+}
 
-      }
-    ).addTo(
-      map
-    );
+const visibleIds=
+new Set(
+visibleTreasures.map(
+t=>t.id
+)
+);
 
 
-    map.createPane(
-      'treasurePane'
-    );
+/*
+ * 画面外になったMarkerを削除。
+ *
+ * データは削除しない。
+ */
+Object.keys(
+treasureMarkers
+).forEach(
+id=>{
 
-    map.getPane(
-      'treasurePane'
-    ).style.zIndex =
-      600;
+if(!visibleIds.has(id)){
 
+const marker=
+treasureMarkers[id];
 
-    map.createPane(
-      'userPane'
-    );
+if(
+map.hasLayer(marker)
+){
 
-    map.getPane(
-      'userPane'
-    ).style.zIndex =
-      700;
+map.removeLayer(marker);
 
+}
 
-    const canvas =
-      document.getElementById(
-        'fog-canvas'
-      );
+delete treasureMarkers[id];
 
+}
 
-    document
-      .getElementById(
-        'map-container'
-      )
-      .appendChild(
-        canvas
-      );
+}
+);
 
 
-    const ctx =
-      canvas.getContext(
-        '2d'
-      );
+/*
+ * 現在の地図周辺だけMarker生成
+ */
+visibleTreasures.forEach(
+t=>{
 
+const iconSymbol=
+t.opened
+?'✅'
+:'🎁';
 
-    function resizeCanvas() {
+if(
+treasureMarkers[t.id]
+){
 
-      requestDrawFog();
+const marker=
+treasureMarkers[t.id];
 
-    }
+if(!map.hasLayer(marker)){
 
+marker.addTo(map);
 
-    window.addEventListener(
-      'resize',
-      resizeCanvas
-    );
+}
 
+const el=
+marker.getElement();
 
-    // ----------------------------------------------------
-    // 4. 霧の描画処理
-    // ----------------------------------------------------
+if(el){
 
-    function drawFog() {
+el.innerHTML=
+iconSymbol;
 
-      const size =
-        map.getSize();
+el.classList.toggle(
+'opened',
+!!t.opened
+);
 
+}
 
-      if (
-        size.x === 0 ||
-        size.y === 0
-      ) {
+return;
 
-        return;
+}
 
-      }
+const customIcon=
+L.divIcon({
 
+className:
+`treasure-marker ${
+t.opened?'opened':''
+}`,
 
-      if (
-        canvas.width !== size.x ||
-        canvas.height !== size.y
-      ) {
+html:
+iconSymbol,
 
-        canvas.width =
-          size.x;
+iconSize:
+[30,30],
 
-        canvas.height =
-          size.y;
+iconAnchor:
+[15,15]
 
-        canvas.style.width =
-          size.x + 'px';
+});
 
-        canvas.style.height =
-          size.y + 'px';
+const marker=
+L.marker(
+[
+t.lat,
+t.lng
+],
+{
+icon:customIcon,
+pane:'treasurePane'
+}
+).addTo(map);
 
-      }
+treasureMarkers[t.id]=
+marker;
 
+marker.on(
+'click',
+()=>{
+tryOpenTreasure(t.id);
+}
+);
 
-      ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+}
+);
 
 
-      ctx.fillStyle =
-        `rgba(255, 255, 255, ${fogOpacity})`;
+updateTreasureUI();
 
 
-      ctx.fillRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
+const debug=
+document.getElementById(
+'treasure-debug'
+);
 
+if(debug){
 
-      ctx.globalCompositeOperation =
-        'destination-out';
+const visibleMarkerCount=
+Object.keys(
+treasureMarkers
+).filter(
+id=>
+treasureMarkers[id]&&
+map.hasLayer(
+treasureMarkers[id]
+)
+).length;
 
+debug.innerText=
+`宝箱データ: ${treasureList.length} / 表示中: ${visibleMarkerCount}`;
 
-      const bounds =
-        map
-          .getBounds()
-          .pad(0.2);
+}
 
+requestDrawFog();
 
-      for (
-        let i = 0;
-        i < visitedPoints.length;
-        i++
-      ) {
+}
 
-        const point =
-          visitedPoints[i];
 
+/*
+ * 地図操作が終わったら、
+ * 現在の表示範囲に合わせて
+ * 宝箱Markerを更新。
+ */
+map.on(
+'moveend zoomend rotateend viewreset',
+renderTreasures
+);
 
-        if (
-          !bounds.contains(
-            [
-              point.lat,
-              point.lng
-            ]
-          )
-        ) {
 
-          continue;
+/* =========================
+   宝箱UI
+========================= */
 
-        }
+function updateTreasureUI(){
 
+document.getElementById(
+'treasure-count'
+).innerText=
+`🎁 ${openedTreasureCount}個`;
 
-        const containerPoint =
-          map.latLngToContainerPoint(
-            [
-              point.lat,
-              point.lng
-            ]
-          );
+const gemElement=
+document.getElementById(
+'gem-count'
+);
 
+if(gemElement){
 
-        const edgeLatLng =
-          L.latLng(
+gemElement.innerText=
+`💎 ${gemCount}個`;
 
-            point.lat,
+}
 
-            point.lng +
-              (
-                point.radius /
-                111320
-              )
+}
 
-          );
 
+/* =========================
+   宝箱検索
+========================= */
 
-        const edgePoint =
-          map.latLngToContainerPoint(
-            edgeLatLng
-          );
+async function fetchDeadEndTreasures(
+lat,
+lng
+){
 
+if(isFetchingTreasures)return;
 
-        const pixelRadius =
-          Math.max(
+isFetchingTreasures=true;
 
-            15,
+showNotification(
+'🔍 周辺の宝箱を検索中...'
+);
 
-            Math.abs(
-              edgePoint.x -
-              containerPoint.x
-            )
+const radius=
+TREASURE_SEARCH_RADIUS_METERS;
 
-          );
+const query=`
+[out:json][timeout:15];
+(
+way[
+"highway"~"residential|service|footway|path|living_street"
+](
+around:${radius},
+${lat},
+${lng}
+);
+);
+out body;
+>;
+out skel qt;
+`;
 
+let data=null;
 
-        const diameter =
-          pixelRadius * 2;
+for(
+const endpoint
+of OVERPASS_ENDPOINTS
+){
 
+try{
 
-        ctx.drawImage(
+const res=
+await fetch(
+endpoint,
+{
+method:'POST',
+headers:{
+'Content-Type':
+'application/x-www-form-urlencoded'
+},
+body:
+'data='+
+encodeURIComponent(query)
+}
+);
 
-          stampCanvas,
+if(res.ok){
 
-          containerPoint.x -
-            pixelRadius,
+data=
+await res.json();
 
-          containerPoint.y -
-            pixelRadius,
+break;
 
-          diameter,
+}
 
-          diameter
+}catch(e){
 
-        );
+console.warn(
+`Endpoint ${endpoint} failed, trying next...`
+);
 
-      }
+}
 
+}
 
-      ctx.globalCompositeOperation =
-        'source-over';
+if(
+!data||
+!data.elements
+){
 
-    }
+console.warn(
+'道路データを取得できなかったため、今回は宝箱を追加しません'
+);
 
+showNotification(
+'⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした'
+);
 
-    function requestDrawFog() {
+isFetchingTreasures=false;
 
-      if (
-        !isRenderPending
-      ) {
+return;
 
-        isRenderPending =
-          true;
+}
 
+try{
 
-        requestAnimationFrame(
+const nodes={};
+const ways=[];
 
-          () => {
+data.elements.forEach(
+el=>{
 
-            drawFog();
+if(
+el.type==='node'&&
+Number.isFinite(el.lat)&&
+Number.isFinite(el.lon)
+){
 
-            isRenderPending =
-              false;
+nodes[el.id]={
+lat:el.lat,
+lng:el.lon
+};
 
-          }
+}
 
-        );
+}
+);
 
-      }
+data.elements.forEach(
+el=>{
 
-    }
+if(
+el.type==='way'&&
+Array.isArray(el.nodes)&&
+el.nodes.length>=2
+){
 
+const validNodes=
+el.nodes.filter(
+id=>nodes[id]
+);
 
-    map.on(
-      'move zoom rotate viewreset resize load',
-      requestDrawFog
-    );
+if(
+validNodes.length>=2
+){
 
+ways.push(
+validNodes
+);
 
-    map.whenReady(
-      () =>
-        requestDrawFog()
-    );
+}
 
+}
 
-    map.on(
-      'tileload tileloadstart',
-      () =>
-        requestDrawFog()
-    );
+}
+);
 
 
-    requestDrawFog();
+/* =========================
+   道路クラスタ
+========================= */
 
+const CLUSTER_RADIUS_METERS=4;
 
-    // ----------------------------------------------------
-    // 現在地マーカー
-    // ----------------------------------------------------
+const clusterList=[];
+const nodeToCluster={};
 
-    function updateUserMarker() {
+for(
+const [id,node]
+of Object.entries(nodes)
+){
 
-      if (
-        !currentLatLng
-      ) {
+let assigned=-1;
 
-        return;
+for(
+let i=0;
+i<clusterList.length;
+i++
+){
 
-      }
+if(
+calculateDistance(
+node.lat,
+node.lng,
+clusterList[i].lat,
+clusterList[i].lng
+)<=
+CLUSTER_RADIUS_METERS
+){
 
+assigned=i;
+break;
 
-      if (
-        !userMarker
-      ) {
+}
 
-        const dotIcon =
-          L.divIcon({
+}
 
-            className:
-              '',
+if(assigned===-1){
 
-            html:
-              '<div class="user-location-dot"></div>',
+assigned=
+clusterList.length;
 
-            iconSize:
-              [16, 16],
+clusterList.push({
+lat:node.lat,
+lng:node.lng,
+members:[]
+});
 
-            iconAnchor:
-              [8, 8]
+}
 
-          });
+clusterList[
+assigned
+].members.push(id);
 
+const members=
+clusterList[
+assigned
+].members;
 
-        userMarker =
-          L.marker(
+let sumLat=0;
+let sumLng=0;
 
-            currentLatLng,
+for(
+const memberId
+of members
+){
 
-            {
+sumLat+=
+nodes[memberId].lat;
 
-              icon:
-                dotIcon,
+sumLng+=
+nodes[memberId].lng;
 
-              pane:
-                'userPane',
+}
 
-              interactive:
-                false
+clusterList[
+assigned
+].lat=
+sumLat/members.length;
 
-            }
+clusterList[
+assigned
+].lng=
+sumLng/members.length;
 
-          )
-          .addTo(
-            map
-          );
+nodeToCluster[id]=
+assigned;
 
+}
 
-      } else {
 
-        userMarker.setLatLng(
-          currentLatLng
-        );
+/* =========================
+   クラスタ接続
+========================= */
 
-      }
+const clusterAdjacency=
+clusterList.map(
+()=>new Set()
+);
 
-    }
+for(
+const way
+of ways
+){
 
+for(
+let i=0;
+i<way.length-1;
+i++
+){
 
-    if (
-      visitedPoints.length > 0
-    ) {
+const aCluster=
+nodeToCluster[
+way[i]
+];
 
-      const last =
-        visitedPoints[
-          visitedPoints.length - 1
-        ];
+const bCluster=
+nodeToCluster[
+way[i+1]
+];
 
+if(
+aCluster===undefined||
+bCluster===undefined||
+aCluster===bCluster
+){
 
-      map.setView(
+continue;
 
-        [
-          last.lat,
-          last.lng
-        ],
+}
 
-        17
+clusterAdjacency[
+aCluster
+].add(
+bCluster
+);
 
-      );
+clusterAdjacency[
+bCluster
+].add(
+aCluster
+);
 
-    }
+}
 
+}
 
-    // ----------------------------------------------------
-    // 5. 宝箱表示・Overpass API描画処理
-    // ----------------------------------------------------
+const searchRadius=
+radius-
+TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
 
-    function createTreasureId(
-      lat,
-      lng
-    ) {
+const deadEndCandidates=[];
 
-      const latKey =
-        Math.round(
-          lat * 1000000
-        );
 
+/* =========================
+   点と線分の距離
+========================= */
 
-      const lngKey =
-        Math.round(
-          lng * 1000000
-        );
+function pointToSegmentDistanceMeters(
+p,
+a,
+b
+){
 
+const latRef=p.lat;
 
-      return (
-        `tr_${latKey}_${lngKey}`
-      );
+const mPerDegLat=111320;
 
-    }
+const mPerDegLng=
+111320*
+Math.cos(
+latRef*
+Math.PI/
+180
+);
 
+const toXY=
+pt=>({
 
-    function renderTreasures() {
+x:
+(pt.lng-p.lng)*
+mPerDegLng,
 
-      treasureList.forEach(
+y:
+(pt.lat-p.lat)*
+mPerDegLat
 
-        t => {
+});
 
-          const iconSymbol =
-            t.opened
-              ? '✅'
-              : '🎁';
+const A=toXY(a);
+const B=toXY(b);
 
+const ABx=
+B.x-A.x;
 
-          if (
-            treasureMarkers[t.id]
-          ) {
+const ABy=
+B.y-A.y;
 
-            const existingMarker =
-              treasureMarkers[t.id];
+const lenSq=
+ABx*ABx+
+ABy*ABy;
 
+let t=
+lenSq===0
+?0
+:(
+(-A.x)*ABx+
+(-A.y)*ABy
+)/
+lenSq;
 
-            if (
-              !map.hasLayer(
-                existingMarker
-              )
-            ) {
+t=
+Math.max(
+0,
+Math.min(
+1,
+t
+)
+);
 
-              existingMarker.addTo(
-                map
-              );
+const closestX=
+A.x+
+ABx*t;
 
-            }
+const closestY=
+A.y+
+ABy*t;
 
+return Math.hypot(
+closestX,
+closestY
+);
 
-            const el =
-              existingMarker.getElement();
+}
 
 
-            if (el) {
+function isNearOtherWaySegment(
+candidate,
+ownClusterId
+){
 
-              el.innerHTML =
-                iconSymbol;
+for(
+const way
+of ways
+){
 
-              el.classList.toggle(
-                'opened',
-                !!t.opened
-              );
+for(
+let i=0;
+i<way.length-1;
+i++
+){
 
-            }
+const aId=
+way[i];
 
+const bId=
+way[i+1];
 
-            return;
+const aCluster=
+nodeToCluster[aId];
 
-          }
+const bCluster=
+nodeToCluster[bId];
 
+if(
+aCluster===ownClusterId||
+bCluster===ownClusterId
+){
 
-          const customIcon =
-            L.divIcon({
+continue;
 
-              className:
-                `treasure-marker ${
-                  t.opened
-                    ? 'opened'
-                    : ''
-                }`,
+}
 
-              html:
-                iconSymbol,
+const a=
+nodes[aId];
 
-              iconSize:
-                [30, 30],
+const b=
+nodes[bId];
 
-              iconAnchor:
-                [15, 15]
+if(!a||!b)continue;
 
-            });
+if(
+pointToSegmentDistanceMeters(
+candidate,
+a,
+b
+)<=
+NEAR_OTHER_WAY_METERS
+){
 
+return true;
 
-          const marker =
-            L.marker(
+}
 
-              [
-                t.lat,
-                t.lng
-              ],
+}
 
-              {
+}
 
-                icon:
-                  customIcon,
+return false;
 
-                pane:
-                  'treasurePane'
+}
 
-              }
 
-            )
-            .addTo(
-              map
-            );
+/* =========================
+   行き止まり候補
+========================= */
 
+clusterList.forEach(
+(
+cluster,
+clusterId
+)=>{
 
-          treasureMarkers[t.id] =
-            marker;
+const neighbors=
+clusterAdjacency[
+clusterId
+];
 
+if(
+neighbors.size!==1
+){
 
-          marker.on(
+return;
 
-            'click',
+}
 
-            () => {
+const distanceFromSearchCenter=
+calculateDistance(
+lat,
+lng,
+cluster.lat,
+cluster.lng
+);
 
-              tryOpenTreasure(
-                t.id
-              );
+if(
+distanceFromSearchCenter>
+searchRadius
+){
 
-            }
+return;
 
-          );
+}
 
-        }
+const neighborId=
+[
+...neighbors
+][0];
 
-      );
+const neighbor=
+clusterList[
+neighborId
+];
 
+let bestNode={
+...cluster
+};
 
-      updateTreasureUI();
+let bestDistance=-1;
 
+for(
+const memberId
+of cluster.members
+){
 
-      const debug =
-        document.getElementById(
-          'treasure-debug'
-        );
+const node=
+nodes[memberId];
 
+const d=
+calculateDistance(
+node.lat,
+node.lng,
+neighbor.lat,
+neighbor.lng
+);
 
-      if (debug) {
+if(
+d>bestDistance
+){
 
-        const visibleMarkerCount =
-          treasureList.reduce(
+bestDistance=d;
+bestNode=node;
 
-            (
-              count,
-              t
-            ) =>
+}
 
-              count +
+}
 
-              (
-                treasureMarkers[t.id] &&
+if(
+isNearOtherWaySegment(
+bestNode,
+clusterId
+)
+){
 
-                map.hasLayer(
-                  treasureMarkers[t.id]
-                )
+return;
 
-                  ? 1
-                  : 0
+}
 
-              ),
+deadEndCandidates.push({
 
-            0
+id:
+`cluster_${clusterId}`,
 
-          );
+lat:
+bestNode.lat,
 
+lng:
+bestNode.lng
 
-        debug.innerText =
-          `宝箱データ: ${treasureList.length} / 表示中: ${visibleMarkerCount}`;
+});
 
-      }
+}
+);
 
 
-      requestDrawFog();
+/* =========================
+   重複除去
+========================= */
 
-    }
+const uniqueDeadEnds=[];
 
+for(
+const candidate
+of deadEndCandidates
+){
 
-    function updateTreasureUI() {
+if(
+!uniqueDeadEnds.some(
+c=>
+calculateDistance(
+c.lat,
+c.lng,
+candidate.lat,
+candidate.lng
+)<15
+)
+){
 
-      document.getElementById(
-        'treasure-count'
-      ).innerText =
-        `🎁 ${openedTreasureCount}個`;
+uniqueDeadEnds.push(
+candidate
+);
 
+}
 
-      const gemElement =
-        document.getElementById(
-          'gem-count'
-        );
+}
 
 
-      if (gemElement) {
+/*
+ * 一度発見した宝箱は削除しない。
+ *
+ * OSMデータの取得結果が検索ごとに
+ * 少し変化しても、発見済みの宝箱は
+ * 永続的に残す。
+ */
 
-        gemElement.innerText =
-          `💎 ${gemCount}個`;
+treasureList=
+treasureList.filter(
+t=>
+t&&
+typeof t.lat==='number'&&
+typeof t.lng==='number'&&
+Number.isFinite(t.lat)&&
+Number.isFinite(t.lng)
+);
 
-      }
+let newAddedCount=0;
 
-    }
+for(
+const candidate
+of uniqueDeadEnds
+){
 
+const exists=
+treasureList.some(
+t=>
+calculateDistance(
+t.lat,
+t.lng,
+candidate.lat,
+candidate.lng
+)<15
+);
 
-    async function fetchDeadEndTreasures(
-      lat,
-      lng
-    ) {
+if(!exists){
 
-      if (
-        isFetchingTreasures
-      ) {
+treasureList.push({
 
-        return;
+id:
+createTreasureId(
+candidate.lat,
+candidate.lng
+),
 
-      }
+lat:
+candidate.lat,
 
+lng:
+candidate.lng,
 
-      isFetchingTreasures =
-        true;
+opened:false
 
+});
 
-      showNotification(
-        '🔍 周辺の宝箱を検索中...'
-      );
+newAddedCount++;
 
+}
 
-      const radius =
-        TREASURE_SEARCH_RADIUS_METERS;
+}
 
+localStorage.setItem(
+STORAGE_KEY_TREASURES,
+JSON.stringify(
+treasureList
+)
+);
 
-      const query = `
+localStorage.setItem(
+'fog_treasure_algorithm_version',
+TREASURE_ALGORITHM_VERSION
+);
 
-        [out:json][timeout:15];
+if(
+newAddedCount>0
+){
 
-        (
+showNotification(
+`🎁 宝箱を ${newAddedCount} 個発見！`
+);
 
-          way[
-            "highway"~"residential|service|footway|path|living_street"
-          ](
-            around:${radius},
-            ${lat},
-            ${lng}
-          );
+}else if(
+uniqueDeadEnds.length===0
+){
 
-        );
+showNotification(
+'🔍 この周辺に宝箱は見つかりませんでした'
+);
 
-        out body;
+}else{
 
-        >;
+showNotification(
+`🔍 宝箱を ${uniqueDeadEnds.length} 箇所確認しました`
+);
 
-        out skel qt;
+}
 
-      `;
+renderTreasures();
 
+}catch(err){
 
-      let data =
-        null;
+console.error(
+'解析エラー:',
+err
+);
 
+showNotification(
+'⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした'
+);
 
-      for (
-        const endpoint
-        of OVERPASS_ENDPOINTS
-      ) {
+}finally{
 
-        try {
+isFetchingTreasures=false;
 
-          const res =
-            await fetch(
+}
 
-              endpoint,
+}
 
-              {
 
-                method:
-                  'POST',
+/* =========================
+   宝箱を開く
+========================= */
 
-                headers:
-                  {
+function tryOpenTreasure(
+treasureId
+){
 
-                    'Content-Type':
-                      'application/x-www-form-urlencoded'
+const treasure=
+treasureList.find(
+t=>t.id===treasureId
+);
 
-                  },
+if(
+!treasure||
+treasure.opened
+){
 
-                body:
-                  'data=' +
-                  encodeURIComponent(
-                    query
-                  )
+return;
 
-              }
+}
 
-            );
+if(
+!currentLatLng||
+!Number.isFinite(currentAccuracy)||
+!currentPositionTimestamp
+){
 
+showNotification(
+'📍 現在地を取得中です。少し待ってからもう一度タップしてください'
+);
 
-          if (
-            res.ok
-          ) {
+return;
 
-            data =
-              await res.json();
+}
 
-            break;
+const positionAge=
+Date.now()-
+currentPositionTimestamp;
 
-          }
+if(
+positionAge>
+TREASURE_TAP_POSITION_MAX_AGE_MS
+){
 
-        } catch (e) {
+showNotification(
+'📍 現在地の情報が古くなっています。少し待ってからもう一度タップしてください'
+);
 
-          console.warn(
-            `Endpoint ${endpoint} failed, trying next...`
-          );
+return;
 
-        }
+}
 
-      }
+if(
+currentAccuracy>
+TREASURE_TAP_MAX_ACCURACY_METERS
+){
 
+showNotification(
+`📍 GPS精度が低いため開けません（現在 ±${Math.round(
+currentAccuracy
+)}m）`
+);
 
-      if (
-        !data ||
-        !data.elements
-      ) {
+return;
 
-        console.warn(
-          '道路データを取得できなかったため、今回は宝箱を追加しません'
-        );
+}
 
+const dist=
+calculateDistance(
+currentLatLng[0],
+currentLatLng[1],
+treasure.lat,
+treasure.lng
+);
 
-        showNotification(
-          '⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした'
-        );
+const safeDistance=
+dist+
+currentAccuracy;
 
+if(
+safeDistance>
+TREASURE_GET_RADIUS_METERS
+){
 
-        isFetchingTreasures =
-          false;
+showNotification(
+`🎁 宝箱に近づいてください（約${Math.round(
+dist
+)}m）`
+);
 
+return;
 
-        return;
+}
 
-      }
+treasure.opened=true;
 
+openedTreasureCount+=1;
 
-      try {
+gemCount+=1;
 
-        const nodes =
-          {};
+localStorage.setItem(
+STORAGE_KEY_TREASURES,
+JSON.stringify(treasureList)
+);
 
-        const ways =
-          [];
+localStorage.setItem(
+STORAGE_KEY_OPENED_TREASURES,
+String(openedTreasureCount)
+);
 
+localStorage.setItem(
+STORAGE_KEY_GEMS,
+String(gemCount)
+);
 
-        data.elements.forEach(
+localStorage.setItem(
+'fog_treasure_algorithm_version',
+TREASURE_ALGORITHM_VERSION
+);
 
-          el => {
+showNotification(
+'🎁 宝箱を開けました！ 💎 ジェムを1個獲得！'
+);
 
-            if (
+renderTreasures();
 
-              el.type === 'node' &&
+}
 
-              Number.isFinite(
-                el.lat
-              ) &&
 
-              Number.isFinite(
-                el.lon
-              )
+function showNotification(msg){
 
-            ) {
+const notif=
+document.getElementById(
+'notification'
+);
 
-              nodes[el.id] = {
+notif.innerText=msg;
 
-                lat:
-                  el.lat,
+notif.style.display='block';
 
-                lng:
-                  el.lon
+setTimeout(
+()=>{
+notif.style.display='none';
+},
+3500
+);
 
-              };
+}
 
-            }
 
-          }
+renderTreasures();
 
-        );
 
+/* =========================
+   宝箱検索ボタン
+========================= */
 
-        data.elements.forEach(
+document
+.getElementById(
+'reload-treasure-btn'
+)
+.addEventListener(
+'click',
+()=>{
 
-          el => {
+if(currentLatLng){
 
-            if (
+lastFetchedLatLng={
+lat:currentLatLng[0],
+lng:currentLatLng[1]
+};
 
-              el.type === 'way' &&
+fetchDeadEndTreasures(
+currentLatLng[0],
+currentLatLng[1]
+);
 
-              Array.isArray(
-                el.nodes
-              ) &&
+}else{
 
-              el.nodes.length >= 2
+alert(
+"GPSで現在地を取得するまでお待ちください。"
+);
 
-            ) {
+}
 
-              const validNodes =
-                el.nodes.filter(
-                  id =>
-                    nodes[id]
-                );
+}
+);
 
 
-              if (
-                validNodes.length >= 2
-              ) {
+/* =========================
+   Wake Lock
+========================= */
 
-                ways.push(
-                  validNodes
-                );
+const wakelockToggle=
+document.getElementById(
+'wakelock-toggle'
+);
 
-              }
+const wakelockBadge=
+document.getElementById(
+'wakelock-badge'
+);
 
-            }
+async function requestWakeLock(){
 
-          }
+if('wakeLock' in navigator){
 
-        );
+try{
 
+wakeLock=
+await navigator.wakeLock.request(
+'screen'
+);
 
-        const CLUSTER_RADIUS_METERS =
-          4;
+wakelockBadge.innerText=
+'ON';
 
+wakelockBadge.className=
+'wakelock-status status-on';
 
-        const clusterList =
-          [];
+wakelockToggle.checked=
+true;
 
+wakeLock.addEventListener(
+'release',
+()=>{
 
-        const nodeToCluster =
-          {};
+wakeLock=null;
 
+wakelockBadge.innerText=
+'OFF';
 
-        for (
-          const [id, node]
-          of Object.entries(nodes)
-        ) {
+wakelockBadge.className=
+'wakelock-status status-off';
 
-          let assigned =
-            -1;
+wakelockToggle.checked=
+false;
 
+}
+);
 
-          for (
-            let i = 0;
-            i < clusterList.length;
-            i++
-          ) {
+}catch(err){
 
-            if (
+wakelockBadge.innerText=
+'エラー';
 
-              calculateDistance(
+wakelockBadge.className=
+'wakelock-status status-off';
 
-                node.lat,
-                node.lng,
+wakelockToggle.checked=
+false;
 
-                clusterList[i].lat,
-                clusterList[i].lng
+}
 
-              )
+}else{
 
-              <=
-              CLUSTER_RADIUS_METERS
+wakelockBadge.innerText=
+'非対応';
 
-            ) {
+wakelockBadge.className=
+'wakelock-status status-off';
 
-              assigned =
-                i;
+wakelockToggle.checked=
+false;
 
-              break;
+}
 
-            }
+}
 
-          }
+function releaseWakeLock(){
 
+if(wakeLock!==null){
 
-          if (
-            assigned === -1
-          ) {
+wakeLock.release();
 
-            assigned =
-              clusterList.length;
+wakeLock=null;
 
+}
 
-            clusterList.push({
+wakelockBadge.innerText=
+'OFF';
 
-              lat:
-                node.lat,
+wakelockBadge.className=
+'wakelock-status status-off';
 
-              lng:
-                node.lng,
+}
 
-              members:
-                []
+wakelockToggle.addEventListener(
+'change',
+e=>{
 
-            });
+if(e.target.checked){
 
-          }
+requestWakeLock();
 
+}else{
 
-          clusterList[
-            assigned
-          ].members.push(
-            id
-          );
+releaseWakeLock();
 
+}
 
-          const members =
-            clusterList[
-              assigned
-            ].members;
+}
+);
 
+document.addEventListener(
+'visibilitychange',
+async()=>{
 
-          let sumLat =
-            0;
+if(
+document.visibilityState==='visible'&&
+wakelockToggle.checked
+){
 
-          let sumLng =
-            0;
+await requestWakeLock();
 
+}
 
-          for (
-            const memberId
-            of members
-          ) {
+}
+);
 
-            sumLat +=
-              nodes[
-                memberId
-              ].lat;
 
-            sumLng +=
-              nodes[
-                memberId
-              ].lng;
+/* =========================
+   霧の濃さ
+========================= */
 
-          }
+const opacitySlider=
+document.getElementById(
+'opacity-slider'
+);
 
+const opacityVal=
+document.getElementById(
+'opacity-val'
+);
 
-          clusterList[
-            assigned
-          ].lat =
-            sumLat /
-            members.length;
+opacitySlider.addEventListener(
+'input',
+e=>{
 
+const value=
+e.target.value;
 
-          clusterList[
-            assigned
-          ].lng =
-            sumLng /
-            members.length;
+opacityVal.innerText=
+`${value}%`;
 
+fogOpacity=
+value/100;
 
-          nodeToCluster[id] =
-            assigned;
+localStorage.setItem(
+STORAGE_KEY_OPACITY,
+value
+);
 
-        }
+requestDrawFog();
 
+}
+);
 
-        const clusterAdjacency =
-          clusterList.map(
-            () =>
-              new Set()
-          );
 
+/* =========================
+   距離計算
+========================= */
 
-        for (
-          const way
-          of ways
-        ) {
+function calculateDistance(
+lat1,
+lon1,
+lat2,
+lon2
+){
 
-          for (
-            let i = 0;
-            i <
-            way.length - 1;
-            i++
-          ) {
+const R=6371000;
 
-            const aCluster =
-              nodeToCluster[
-                way[i]
-              ];
+const dLat=
+(lat2-lat1)*
+Math.PI/
+180;
 
+const dLon=
+(lon2-lon1)*
+Math.PI/
+180;
 
-            const bCluster =
-              nodeToCluster[
-                way[i + 1]
-              ];
+const a=
+Math.sin(dLat/2)*
+Math.sin(dLat/2)+
+Math.cos(
+lat1*
+Math.PI/
+180
+)*
+Math.cos(
+lat2*
+Math.PI/
+180
+)*
+Math.sin(dLon/2)*
+Math.sin(dLon/2);
 
+return R*2*
+Math.atan2(
+Math.sqrt(a),
+Math.sqrt(1-a)
+);
 
-            if (
+}
 
-              aCluster ===
-              undefined ||
 
-              bCluster ===
-              undefined ||
+/* =========================
+   GPS
+========================= */
 
-              aCluster ===
-              bCluster
+function startGeolocation(
+highAccuracy=true
+){
 
-            ) {
+if(
+!("geolocation" in navigator)
+){
 
-              continue;
+document.getElementById(
+"status"
+).innerText=
+"GPS非対応ブラウザです";
 
-            }
+return;
 
+}
 
-            clusterAdjacency[
-              aCluster
-            ].add(
-              bCluster
-            );
+if(
+watchId!==null
+){
 
+navigator.geolocation.clearWatch(
+watchId
+);
 
-            clusterAdjacency[
-              bCluster
-            ].add(
-              aCluster
-            );
+}
 
-          }
+const options={
+enableHighAccuracy:highAccuracy,
+timeout:
+highAccuracy?15000:30000,
+maximumAge:3000
+};
 
-        }
+watchId=
+navigator.geolocation.watchPosition(
 
+position=>{
 
-        const searchRadius =
-          radius -
-          TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
+const lat=
+position.coords.latitude;
 
+const lng=
+position.coords.longitude;
 
-        const deadEndCandidates =
-          [];
+const accuracy=
+position.coords.accuracy;
 
+currentLatLng=
+[
+lat,
+lng
+];
 
-        function pointToSegmentDistanceMeters(
-          p,
-          a,
-          b
-        ) {
+currentAccuracy=
+accuracy;
 
-          const latRef =
-            p.lat;
+currentPositionTimestamp=
+Date.now();
 
+if(
+visitedPoints.length===0&&
+!userMarker
+){
 
-          const mPerDegLat =
-            111320;
+map.setView(
+currentLatLng,
+17
+);
 
+}
 
-          const mPerDegLng =
-            111320 *
-            Math.cos(
-              latRef *
-              Math.PI /
-              180
-            );
+if(
+!lastFetchedLatLng||
+calculateDistance(
+lastFetchedLatLng.lat,
+lastFetchedLatLng.lng,
+lat,
+lng
+)>=
+REFETCH_TREASURE_DISTANCE
+){
 
+lastFetchedLatLng={
+lat,
+lng
+};
 
-          const toXY =
-            pt => ({
+fetchDeadEndTreasures(
+lat,
+lng
+);
 
-              x:
-                (
-                  pt.lng -
-                  p.lng
-                ) *
-                mPerDegLng,
+}
 
-              y:
-                (
-                  pt.lat -
-                  p.lat
-                ) *
-                mPerDegLat
+if(
+accuracy<=150
+){
 
-            });
+let shouldAdd=false;
 
+if(
+visitedPoints.length===0
+){
 
-          const A =
-            toXY(a);
+shouldAdd=true;
 
+}else{
 
-          const B =
-            toXY(b);
+const lastPoint=
+visitedPoints[
+visitedPoints.length-1
+];
 
+const dist=
+calculateDistance(
+lastPoint.lat,
+lastPoint.lng,
+lat,
+lng
+);
 
-          const ABx =
-            B.x -
-            A.x;
+if(
+dist>=
+MIN_RECORD_DISTANCE_METERS
+){
 
+shouldAdd=true;
 
-          const ABy =
-            B.y -
-            A.y;
+}
 
+}
 
-          const lenSq =
-            ABx * ABx +
-            ABy * ABy;
+if(shouldAdd){
 
+visitedPoints.push({
 
-          let t =
-            lenSq === 0
+lat:lat,
+lng:lng,
+radius:
+UNFOG_RADIUS_METERS
 
-              ? 0
+});
 
-              :
+localStorage.setItem(
+STORAGE_KEY_POINTS,
+JSON.stringify(
+visitedPoints
+)
+);
 
-                (
-                  (-A.x) *
-                  ABx +
+requestDrawFog();
 
-                  (-A.y) *
-                  ABy
-                ) /
-                lenSq;
+}
 
+}
 
-          t =
-            Math.max(
-              0,
-              Math.min(
-                1,
-                t
-              )
-            );
+updateUserMarker();
 
+document.getElementById(
+"status"
+).innerText=
+`開拓: ${visitedPoints.length}pt (精度:±${Math.round(
+accuracy
+)}m)`;
 
-          const closestX =
-            A.x +
-            ABx * t;
+},
 
+error=>{
 
-          const closestY =
-            A.y +
-            ABy * t;
+console.warn(
+"GPSエラー:",
+error
+);
 
+let errMsg=
+"GPSエラー";
 
-          return Math.hypot(
-            closestX,
-            closestY
-          );
+switch(error.code){
 
-        }
+case error.PERMISSION_DENIED:
 
+errMsg=
+"⚠️ 位置情報が「拒否」されています。";
 
-        function isNearOtherWaySegment(
-          candidate,
-          ownClusterId
-        ) {
+break;
 
-          for (
-            const way
-            of ways
-          ) {
+case error.POSITION_UNAVAILABLE:
 
-            for (
-              let i = 0;
-              i <
-              way.length - 1;
-              i++
-            ) {
+errMsg=
+"位置情報を取得できません";
 
-              const aId =
-                way[i];
+break;
 
+case error.TIMEOUT:
 
-              const bId =
-                way[i + 1];
+if(highAccuracy){
 
+document.getElementById(
+"status"
+).innerText=
+"高精度測位タイムアウト。標準精度で試行中...";
 
-              const aCluster =
-                nodeToCluster[
-                  aId
-                ];
+startGeolocation(false);
 
+return;
 
-              const bCluster =
-                nodeToCluster[
-                  bId
-                ];
+}
 
+errMsg=
+"GPSタイムアウト。屋外でお試しください。";
 
-              if (
+break;
 
-                aCluster ===
-                ownClusterId ||
+}
 
-                bCluster ===
-                ownClusterId
+document.getElementById(
+"status"
+).innerText=
+errMsg;
 
-              ) {
+},
 
-                continue;
+options
 
-              }
+);
 
+}
 
-              const a =
-                nodes[aId];
+startGeolocation(true);
 
 
-              const b =
-                nodes[bId];
+/* =========================
+   現在地へ移動
+========================= */
 
+document
+.getElementById(
+'locate-btn'
+)
+.addEventListener(
+'click',
+()=>{
 
-              if (
-                !a ||
-                !b
-              ) {
+if(currentLatLng){
 
-                continue;
+map.flyTo(
+currentLatLng,
+17,
+{
+duration:1.2
+}
+);
 
-              }
+}else{
 
+alert(
+"現在地を取得中です。少し待ってからお試しください。"
+);
 
-              if (
+}
 
-                pointToSegmentDistanceMeters(
-                  candidate,
-                  a,
-                  b
-                )
+}
+);
 
-                <=
-                NEAR_OTHER_WAY_METERS
 
-              ) {
+/* =========================
+   Cache
+========================= */
 
-                return true;
+if(
+'serviceWorker' in navigator
+){
 
-              }
+navigator.serviceWorker
+.getRegistrations()
+.then(
+registrations=>{
 
-            }
+for(
+let registration
+of registrations
+){
 
-          }
+registration.unregister();
 
+}
 
-          return false;
+}
+);
 
-        }
+}
 
+if('caches' in window){
 
-        clusterList.forEach(
+caches.keys()
+.then(
+names=>{
 
-          (
-            cluster,
-            clusterId
-          ) => {
+for(
+let name
+of names
+){
 
-            const neighbors =
-              clusterAdjacency[
-                clusterId
-              ];
+caches.delete(name);
 
+}
 
-            if (
-              neighbors.size !== 1
-            ) {
+}
+);
 
-              return;
+}
 
-            }
-
-
-            const distanceFromSearchCenter =
-              calculateDistance(
-
-                lat,
-                lng,
-
-                cluster.lat,
-                cluster.lng
-
-              );
-
-
-            if (
-              distanceFromSearchCenter >
-              searchRadius
-            ) {
-
-              return;
-
-            }
-
-
-            const neighborId =
-              [
-                ...neighbors
-              ][0];
-
-
-            const neighbor =
-              clusterList[
-                neighborId
-              ];
-
-
-            let bestNode =
-              {
-                ...cluster
-              };
-
-
-            let bestDistance =
-              -1;
-
-
-            for (
-              const memberId
-              of cluster.members
-            ) {
-
-              const node =
-                nodes[
-                  memberId
-                ];
-
-
-              const d =
-                calculateDistance(
-
-                  node.lat,
-                  node.lng,
-
-                  neighbor.lat,
-                  neighbor.lng
-
-                );
-
-
-              if (
-                d >
-                bestDistance
-              ) {
-
-                bestDistance =
-                  d;
-
-                bestNode =
-                  node;
-
-              }
-
-            }
-
-
-            if (
-              isNearOtherWaySegment(
-                bestNode,
-                clusterId
-              )
-            ) {
-
-              return;
-
-            }
-
-
-            deadEndCandidates.push({
-
-              id:
-                `cluster_${clusterId}`,
-
-              lat:
-                bestNode.lat,
-
-              lng:
-                bestNode.lng
-
-            });
-
-          }
-
-        );
-
-
-        const uniqueDeadEnds =
-          [];
-
-
-        for (
-          const candidate
-          of deadEndCandidates
-        ) {
-
-          if (
-
-            !uniqueDeadEnds.some(
-
-              c =>
-
-                calculateDistance(
-
-                  c.lat,
-                  c.lng,
-
-                  candidate.lat,
-                  candidate.lng
-
-                ) < 15
-
-            )
-
-          ) {
-
-            uniqueDeadEnds.push(
-              candidate
-            );
-
-          }
-
-        }
-
-
-        /*
-         * 重要:
-         *
-         * 一度発見した宝箱は、
-         * 今回の検索で再検出できなくても削除しない。
-         *
-         * OSMの検索結果は回ごとに揺れることがあるため、
-         * 「発見済みの宝箱」を検索結果に依存して
-         * 消してしまうと、同じ場所を再検索しただけで
-         * 宝箱が消える可能性があります。
-         *
-         * 今回は「新しい候補だけを追加する」方式にします。
-         */
-
-        treasureList =
-          treasureList.filter(
-
-            t =>
-
-              t &&
-
-              typeof t.lat ===
-                'number' &&
-
-              typeof t.lng ===
-                'number' &&
-
-              Number.isFinite(
-                t.lat
-              ) &&
-
-              Number.isFinite(
-                t.lng
-              )
-
-          );
-
-
-        let newAddedCount =
-          0;
-
-
-        for (
-          const candidate
-          of uniqueDeadEnds
-        ) {
-
-          const exists =
-            treasureList.some(
-
-              t =>
-
-                calculateDistance(
-
-                  t.lat,
-                  t.lng,
-
-                  candidate.lat,
-                  candidate.lng
-
-                ) < 15
-
-            );
-
-
-          if (!exists) {
-
-            treasureList.push({
-
-              id:
-                createTreasureId(
-                  candidate.lat,
-                  candidate.lng
-                ),
-
-              lat:
-                candidate.lat,
-
-              lng:
-                candidate.lng,
-
-              opened:
-                false
-
-            });
-
-
-            newAddedCount++;
-
-          }
-
-        }
-
-
-        localStorage.setItem(
-          STORAGE_KEY_TREASURES,
-          JSON.stringify(
-            treasureList
-          )
-        );
-
-
-        localStorage.setItem(
-          'fog_treasure_algorithm_version',
-          TREASURE_ALGORITHM_VERSION
-        );
-
-
-        if (
-          newAddedCount > 0
-        ) {
-
-          showNotification(
-            `🎁 宝箱を ${newAddedCount} 個発見！`
-          );
-
-        } else if (
-          uniqueDeadEnds.length === 0
-        ) {
-
-          showNotification(
-            '🔍 この周辺に宝箱は見つかりませんでした'
-          );
-
-        } else {
-
-          showNotification(
-            `🔍 宝箱を ${uniqueDeadEnds.length} 箇所確認しました`
-          );
-
-        }
-
-
-        renderTreasures();
-
-
-      } catch (err) {
-
-        console.error(
-          '解析エラー:',
-          err
-        );
-
-
-        showNotification(
-          '⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした'
-        );
-
-      } finally {
-
-        isFetchingTreasures =
-          false;
-
-      }
-
-    }
-
-
-    // ----------------------------------------------------
-    // 宝箱を開く
-    // ----------------------------------------------------
-
-    function tryOpenTreasure(
-      treasureId
-    ) {
-
-      const treasure =
-        treasureList.find(
-          t =>
-            t.id ===
-            treasureId
-        );
-
-
-      if (
-        !treasure ||
-        treasure.opened
-      ) {
-
-        return;
-
-      }
-
-
-      if (
-        !currentLatLng ||
-        !Number.isFinite(
-          currentAccuracy
-        ) ||
-        !currentPositionTimestamp
-      ) {
-
-        showNotification(
-          '📍 現在地を取得中です。少し待ってからもう一度タップしてください'
-        );
-
-        return;
-
-      }
-
-
-      const positionAge =
-        Date.now() -
-        currentPositionTimestamp;
-
-
-      if (
-        positionAge >
-        TREASURE_TAP_POSITION_MAX_AGE_MS
-      ) {
-
-        showNotification(
-          '📍 現在地の情報が古くなっています。少し待ってからもう一度タップしてください'
-        );
-
-        return;
-
-      }
-
-
-      if (
-        currentAccuracy >
-        TREASURE_TAP_MAX_ACCURACY_METERS
-      ) {
-
-        showNotification(
-
-          `📍 GPS精度が低いため開けません（現在 ±${Math.round(
-            currentAccuracy
-          )}m）`
-
-        );
-
-        return;
-
-      }
-
-
-      const dist =
-        calculateDistance(
-
-          currentLatLng[0],
-          currentLatLng[1],
-
-          treasure.lat,
-          treasure.lng
-
-        );
-
-
-      const safeDistance =
-        dist +
-        currentAccuracy;
-
-
-      if (
-        safeDistance >
-        TREASURE_GET_RADIUS_METERS
-      ) {
-
-        showNotification(
-
-          `🎁 宝箱に近づいてください（約${Math.round(
-            dist
-          )}m）`
-
-        );
-
-        return;
-
-      }
-
-
-      treasure.opened =
-        true;
-
-
-      openedTreasureCount +=
-        1;
-
-
-      gemCount +=
-        1;
-
-
-      localStorage.setItem(
-
-        STORAGE_KEY_TREASURES,
-
-        JSON.stringify(
-          treasureList
-        )
-
-      );
-
-
-      localStorage.setItem(
-
-        STORAGE_KEY_OPENED_TREASURES,
-
-        String(
-          openedTreasureCount
-        )
-
-      );
-
-
-      localStorage.setItem(
-
-        STORAGE_KEY_GEMS,
-
-        String(
-          gemCount
-        )
-
-      );
-
-
-      localStorage.setItem(
-
-        'fog_treasure_algorithm_version',
-
-        TREASURE_ALGORITHM_VERSION
-
-      );
-
-
-      showNotification(
-        '🎁 宝箱を開けました！ 💎 ジェムを1個獲得！'
-      );
-
-
-      renderTreasures();
-
-    }
-
-
-    function showNotification(
-      msg
-    ) {
-
-      const notif =
-        document.getElementById(
-          'notification'
-        );
-
-
-      notif.innerText =
-        msg;
-
-
-      notif.style.display =
-        'block';
-
-
-      setTimeout(
-        () => {
-
-          notif.style.display =
-            'none';
-
-        },
-
-        3500
-
-      );
-
-    }
-
-
-    renderTreasures();
-
-
-    // ----------------------------------------------------
-    // 宝箱検索ボタン
-    // ----------------------------------------------------
-
-    document
-      .getElementById(
-        'reload-treasure-btn'
-      )
-      .addEventListener(
-
-        'click',
-
-        () => {
-
-          if (
-            currentLatLng
-          ) {
-
-            lastFetchedLatLng =
-              {
-
-                lat:
-                  currentLatLng[0],
-
-                lng:
-                  currentLatLng[1]
-
-              };
-
-
-            fetchDeadEndTreasures(
-
-              currentLatLng[0],
-
-              currentLatLng[1]
-
-            );
-
-
-          } else {
-
-            alert(
-              "GPSで現在地を取得するまでお待ちください。"
-            );
-
-          }
-
-        }
-
-      );
-
-
-    // ----------------------------------------------------
-    // 6. Screen Wake Lock API
-    // ----------------------------------------------------
-
-    const wakelockToggle =
-      document.getElementById(
-        'wakelock-toggle'
-      );
-
-
-    const wakelockBadge =
-      document.getElementById(
-        'wakelock-badge'
-      );
-
-
-    async function requestWakeLock() {
-
-      if (
-        'wakeLock' in navigator
-      ) {
-
-        try {
-
-          wakeLock =
-            await navigator.wakeLock.request(
-              'screen'
-            );
-
-
-          wakelockBadge.innerText =
-            'ON';
-
-
-          wakelockBadge.className =
-            'wakelock-status status-on';
-
-
-          wakelockToggle.checked =
-            true;
-
-
-          wakeLock.addEventListener(
-
-            'release',
-
-            () => {
-
-              wakeLock =
-                null;
-
-              wakelockBadge.innerText =
-                'OFF';
-
-              wakelockBadge.className =
-                'wakelock-status status-off';
-
-              wakelockToggle.checked =
-                false;
-
-            }
-
-          );
-
-
-        } catch (err) {
-
-          wakelockBadge.innerText =
-            'エラー';
-
-          wakelockBadge.className =
-            'wakelock-status status-off';
-
-          wakelockToggle.checked =
-            false;
-
-        }
-
-      } else {
-
-        wakelockBadge.innerText =
-          '非対応';
-
-        wakelockBadge.className =
-          'wakelock-status status-off';
-
-        wakelockToggle.checked =
-          false;
-
-      }
-
-    }
-
-
-    function releaseWakeLock() {
-
-      if (
-        wakeLock !== null
-      ) {
-
-        wakeLock.release();
-
-        wakeLock =
-          null;
-
-      }
-
-
-      wakelockBadge.innerText =
-        'OFF';
-
-
-      wakelockBadge.className =
-        'wakelock-status status-off';
-
-    }
-
-
-    wakelockToggle.addEventListener(
-
-      'change',
-
-      e => {
-
-        if (
-          e.target.checked
-        ) {
-
-          requestWakeLock();
-
-        } else {
-
-          releaseWakeLock();
-
-        }
-
-      }
-
-    );
-
-
-    document.addEventListener(
-
-      'visibilitychange',
-
-      async () => {
-
-        if (
-
-          document.visibilityState ===
-          'visible' &&
-
-          wakelockToggle.checked
-
-        ) {
-
-          await requestWakeLock();
-
-        }
-
-      }
-
-    );
-
-
-    // ----------------------------------------------------
-    // 7. UIイベント処理
-    // ----------------------------------------------------
-
-    const opacitySlider =
-      document.getElementById(
-        'opacity-slider'
-      );
-
-
-    const opacityVal =
-      document.getElementById(
-        'opacity-val'
-      );
-
-
-    opacitySlider.addEventListener(
-
-      'input',
-
-      e => {
-
-        const value =
-          e.target.value;
-
-
-        opacityVal.innerText =
-          `${value}%`;
-
-
-        fogOpacity =
-          value / 100;
-
-
-        localStorage.setItem(
-
-          STORAGE_KEY_OPACITY,
-
-          value
-
-        );
-
-
-        requestDrawFog();
-
-      }
-
-    );
-
-
-    function calculateDistance(
-      lat1,
-      lon1,
-      lat2,
-      lon2
-    ) {
-
-      const R =
-        6371000;
-
-
-      const dLat =
-        (
-          lat2 -
-          lat1
-        ) *
-        Math.PI /
-        180;
-
-
-      const dLon =
-        (
-          lon2 -
-          lon1
-        ) *
-        Math.PI /
-        180;
-
-
-      const a =
-
-        Math.sin(
-          dLat / 2
-        ) *
-        Math.sin(
-          dLat / 2
-        ) +
-
-        Math.cos(
-          lat1 *
-          Math.PI /
-          180
-        ) *
-
-        Math.cos(
-          lat2 *
-          Math.PI /
-          180
-        ) *
-
-        Math.sin(
-          dLon / 2
-        ) *
-
-        Math.sin(
-          dLon / 2
-        );
-
-
-      return (
-
-        R *
-        2 *
-        Math.atan2(
-
-          Math.sqrt(a),
-
-          Math.sqrt(
-            1 - a
-          )
-
-        )
-
-      );
-
-    }
-
-
-    // ----------------------------------------------------
-    // 8. GPS位置情報連携
-    // ----------------------------------------------------
-
-    function startGeolocation(
-      highAccuracy = true
-    ) {
-
-      if (
-        !(
-          "geolocation"
-          in navigator
-        )
-      ) {
-
-        document.getElementById(
-          "status"
-        ).innerText =
-          "GPS非対応ブラウザです";
-
-        return;
-
-      }
-
-
-      if (
-        watchId !== null
-      ) {
-
-        navigator.geolocation.clearWatch(
-          watchId
-        );
-
-      }
-
-
-      const options = {
-
-        enableHighAccuracy:
-          highAccuracy,
-
-        timeout:
-          highAccuracy
-            ? 15000
-            : 30000,
-
-        maximumAge:
-          3000
-
-      };
-
-
-      watchId =
-        navigator.geolocation.watchPosition(
-
-          position => {
-
-            const lat =
-              position.coords.latitude;
-
-            const lng =
-              position.coords.longitude;
-
-            const accuracy =
-              position.coords.accuracy;
-
-
-            currentLatLng =
-              [
-                lat,
-                lng
-              ];
-
-
-            currentAccuracy =
-              accuracy;
-
-
-            currentPositionTimestamp =
-              Date.now();
-
-
-            if (
-              visitedPoints.length === 0 &&
-              !userMarker
-            ) {
-
-              map.setView(
-                currentLatLng,
-                17
-              );
-
-            }
-
-
-            if (
-
-              !lastFetchedLatLng ||
-
-              calculateDistance(
-
-                lastFetchedLatLng.lat,
-                lastFetchedLatLng.lng,
-
-                lat,
-                lng
-
-              ) >=
-              REFETCH_TREASURE_DISTANCE
-
-            ) {
-
-              lastFetchedLatLng =
-                {
-
-                  lat,
-                  lng
-
-                };
-
-
-              fetchDeadEndTreasures(
-                lat,
-                lng
-              );
-
-            }
-
-
-            if (
-              accuracy <= 150
-            ) {
-
-              let shouldAdd =
-                false;
-
-
-              if (
-                visitedPoints.length === 0
-              ) {
-
-                shouldAdd =
-                  true;
-
-              } else {
-
-                const lastPoint =
-                  visitedPoints[
-                    visitedPoints.length - 1
-                  ];
-
-
-                const dist =
-                  calculateDistance(
-
-                    lastPoint.lat,
-                    lastPoint.lng,
-
-                    lat,
-                    lng
-
-                  );
-
-
-                if (
-                  dist >=
-                  MIN_RECORD_DISTANCE_METERS
-                ) {
-
-                  shouldAdd =
-                    true;
-
-                }
-
-              }
-
-
-              if (
-                shouldAdd
-              ) {
-
-                visitedPoints.push(
-
-                  {
-
-                    lat:
-                      lat,
-
-                    lng:
-                      lng,
-
-                    radius:
-                      UNFOG_RADIUS_METERS
-
-                  }
-
-                );
-
-
-                localStorage.setItem(
-
-                  STORAGE_KEY_POINTS,
-
-                  JSON.stringify(
-                    visitedPoints
-                  )
-
-                );
-
-
-                requestDrawFog();
-
-              }
-
-            }
-
-
-            updateUserMarker();
-
-
-            document.getElementById(
-              "status"
-            ).innerText =
-              `開拓: ${visitedPoints.length}pt (精度:±${Math.round(
-                accuracy
-              )}m)`;
-
-          },
-
-
-          error => {
-
-            console.warn(
-              "GPSエラー:",
-              error
-            );
-
-
-            let errMsg =
-              "GPSエラー";
-
-
-            switch (
-              error.code
-            ) {
-
-              case error.PERMISSION_DENIED:
-
-                errMsg =
-                  "⚠️ 位置情報が「拒否」されています。";
-
-                break;
-
-
-              case error.POSITION_UNAVAILABLE:
-
-                errMsg =
-                  "位置情報を取得できません";
-
-                break;
-
-
-              case error.TIMEOUT:
-
-                if (
-                  highAccuracy
-                ) {
-
-                  document.getElementById(
-                    "status"
-                  ).innerText =
-                    "高精度測位タイムアウト。標準精度で試行中...";
-
-
-                  startGeolocation(
-                    false
-                  );
-
-
-                  return;
-
-                }
-
-
-                errMsg =
-                  "GPSタイムアウト。屋外でお試しください。";
-
-                break;
-
-            }
-
-
-            document.getElementById(
-              "status"
-            ).innerText =
-              errMsg;
-
-          },
-
-
-          options
-
-        );
-
-    }
-
-
-    startGeolocation(
-      true
-    );
-
-
-    document
-      .getElementById(
-        'locate-btn'
-      )
-      .addEventListener(
-
-        'click',
-
-        () => {
-
-          if (
-            currentLatLng
-          ) {
-
-            map.flyTo(
-
-              currentLatLng,
-
-              17,
-
-              {
-
-                duration:
-                  1.2
-
-              }
-
-            );
-
-          } else {
-
-            alert(
-              "現在地を取得中です。少し待ってからお試しください。"
-            );
-
-          }
-
-        }
-
-      );
-
-
-    // ----------------------------------------------------
-    // Service Worker / Cache
-    // ----------------------------------------------------
-
-    if (
-      'serviceWorker'
-      in navigator
-    ) {
-
-      navigator.serviceWorker
-        .getRegistrations()
-        .then(
-
-          registrations => {
-
-            for (
-              let registration
-              of registrations
-            ) {
-
-              registration.unregister();
-
-            }
-
-          }
-
-        );
-
-    }
-
-
-    if (
-      'caches'
-      in window
-    ) {
-
-      caches.keys()
-        .then(
-
-          names => {
-
-            for (
-              let name
-              of names
-            ) {
-
-              caches.delete(
-                name
-              );
-
-            }
-
-          }
-
-        );
-
-    }
-
-  </script>
-
+</script>
 </body>
 </html>
