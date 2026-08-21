@@ -232,7 +232,7 @@
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.1.0</div>
+    <div id="app-version">v1.1.1</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -491,10 +491,18 @@
         const iconSymbol = t.opened ? '✅' : '🎁';
         
         if (treasureMarkers[t.id]) {
-          const el = treasureMarkers[t.id].getElement();
+          const existingMarker = treasureMarkers[t.id];
+
+          // Markerオブジェクトが残っていても、地図から外れている場合があります。
+          // その場合は再度mapへ追加して表示を復元します。
+          if (!map.hasLayer(existingMarker)) {
+            existingMarker.addTo(map);
+          }
+
+          const el = existingMarker.getElement();
           if (el) {
             el.innerHTML = iconSymbol;
-            if (t.opened) el.classList.add('opened');
+            el.classList.toggle('opened', !!t.opened);
           }
           return;
         }
