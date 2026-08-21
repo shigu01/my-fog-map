@@ -31,10 +31,12 @@
       width: 100%;
       height: 100%;
     }
+
     #map {
       width: 100%;
       height: 100%;
     }
+
     /* アプリバージョン表示 */
     #app-version {
       position: absolute;
@@ -96,6 +98,7 @@
       font-size: 11px;
       color: #444;
     }
+
     .control-row input[type="range"] {
       width: 80px;
       cursor: pointer;
@@ -107,14 +110,23 @@
       align-items: center;
       gap: 4px;
     }
+
     .wakelock-status {
       font-size: 9px;
       padding: 1px 4px;
       border-radius: 3px;
       font-weight: bold;
     }
-    .status-on { background: #e3f9e5; color: #1f9d55; }
-    .status-off { background: #f1f3f5; color: #868e96; }
+
+    .status-on {
+      background: #e3f9e5;
+      color: #1f9d55;
+    }
+
+    .status-off {
+      background: #f1f3f5;
+      color: #868e96;
+    }
 
     #reload-treasure-btn {
       margin-top: 2px;
@@ -126,6 +138,7 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
     #reload-treasure-btn:active {
       background: #2980b9;
     }
@@ -147,6 +160,7 @@
       justify-content: center;
       font-size: 20px;
     }
+
     #locate-btn:active {
       transform: scale(0.92);
       background-color: #f0f0f0;
@@ -161,6 +175,7 @@
       pointer-events: auto;
       cursor: pointer;
     }
+
     .treasure-marker.opened {
       font-size: 20px;
       opacity: 0.7;
@@ -195,859 +210,3206 @@
     }
   </style>
 </head>
+
 <body>
 
   <div id="map-container">
+
     <!-- 画面通知 -->
     <div id="notification"></div>
 
     <div id="controls">
-      <div id="status">位置情報を取得中...</div>
-      
-      <div class="control-row">
-        <label for="opacity-slider">霧の濃さ: <span id="opacity-val">100%</span></label>
-        <input type="range" id="opacity-slider" min="50" max="100" value="100">
+
+      <div id="status">
+        位置情報を取得中...
       </div>
 
       <div class="control-row">
-        <span>画面常時点灯:</span>
-        <label class="switch-label">
-          <input type="checkbox" id="wakelock-toggle">
-          <span id="wakelock-badge" class="wakelock-status status-off">OFF</span>
+        <label for="opacity-slider">
+          霧の濃さ:
+          <span id="opacity-val">100%</span>
         </label>
+
+        <input
+          type="range"
+          id="opacity-slider"
+          min="50"
+          max="100"
+          value="100"
+        >
+      </div>
+
+      <div class="control-row">
+
+        <span>画面常時点灯:</span>
+
+        <label class="switch-label">
+
+          <input
+            type="checkbox"
+            id="wakelock-toggle"
+          >
+
+          <span
+            id="wakelock-badge"
+            class="wakelock-status status-off"
+          >
+            OFF
+          </span>
+
+        </label>
+
       </div>
 
       <!-- 宝箱獲得数表示と手動取得ボタン -->
-      <div class="control-row" style="border-top: 1px solid #ddd; padding-top: 4px; margin-top:2px;">
-        <span>累計獲得宝箱:</span>
-        <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0個</span>
+
+      <div
+        class="control-row"
+        style="border-top: 1px solid #ddd; padding-top: 4px; margin-top:2px;"
+      >
+        <span>
+          累計獲得宝箱:
+        </span>
+
+        <span
+          id="treasure-count"
+          style="font-weight: bold; color: #d35400;"
+        >
+          🎁 0個
+        </span>
       </div>
+
       <div class="control-row">
-        <span>ジェム:</span>
-        <span id="gem-count" style="font-weight: bold; color: #6c5ce7;">💎 0個</span>
+
+        <span>
+          ジェム:
+        </span>
+
+        <span
+          id="gem-count"
+          style="font-weight: bold; color: #6c5ce7;"
+        >
+          💎 0個
+        </span>
+
       </div>
-      <button id="reload-treasure-btn">🔍 周辺の宝箱を検索</button>
-      <div style="font-size:9px; color:#777; line-height:1.35;">※ 宝箱の近くでマークをタップして開けます</div>
+
+      <button id="reload-treasure-btn">
+        🔍 周辺の宝箱を検索
+      </button>
+
+      <div
+        style="font-size:9px; color:#777; line-height:1.35;"
+      >
+        ※ 宝箱の近くでマークをタップして開けます
+      </div>
+
     </div>
 
     <div id="map"></div>
+
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.1.1</div>
-    
-    <button id="locate-btn" title="現在地に移動">🎯</button>
+
+    <div id="app-version">
+      v1.1.2
+    </div>
+
+    <button
+      id="locate-btn"
+      title="現在地に移動"
+    >
+      🎯
+    </button>
+
   </div>
 
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 
+
   <script>
-    // --- 1. 定数と変数 ---
-    const STORAGE_KEY_POINTS = 'fog_visited_points';
-    const STORAGE_KEY_OPACITY = 'fog_opacity_value';
-    const STORAGE_KEY_TREASURES = 'fog_treasures_data';
-    const STORAGE_KEY_GEMS = 'fog_gems';
-    const STORAGE_KEY_OPENED_TREASURES = 'fog_opened_treasure_count';
-    
-    const UNFOG_RADIUS_METERS = 50; 
-    const MIN_RECORD_DISTANCE_METERS = 5;
-    const TREASURE_GET_RADIUS_METERS = 25; // 宝箱までの距離 + GPS誤差が25m以内
-    const TREASURE_TAP_MAX_ACCURACY_METERS = 20; // タップで開けるために必要なGPS精度
-    const TREASURE_TAP_POSITION_MAX_AGE_MS = 10000; // GPS位置情報の最大経過時間(10秒)
-    const REFETCH_TREASURE_DISTANCE = 300;  // 300m移動したら自動再取得
-    const TREASURE_SEARCH_RADIUS_METERS = 400;
-    const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS = 60;
-    const TREASURE_ALGORITHM_VERSION = 'dead-end-v6';
-    // 候補地点から別の道路way線分までがこの距離以内なら、
-    // OSM上でnodeを共有していなくても実質的な接続・交差点とみなして除外する。
-    const NEAR_OTHER_WAY_METERS = 6;
+
+    // ----------------------------------------------------
+    // 1. 定数と変数
+    // ----------------------------------------------------
+
+    const STORAGE_KEY_POINTS =
+      'fog_visited_points';
+
+    const STORAGE_KEY_OPACITY =
+      'fog_opacity_value';
+
+    const STORAGE_KEY_TREASURES =
+      'fog_treasures_data';
+
+    const STORAGE_KEY_GEMS =
+      'fog_gems';
+
+    const STORAGE_KEY_OPENED_TREASURES =
+      'fog_opened_treasure_count';
+
+
+    const UNFOG_RADIUS_METERS =
+      50;
+
+    const MIN_RECORD_DISTANCE_METERS =
+      5;
+
+    const TREASURE_GET_RADIUS_METERS =
+      25;
+
+    const TREASURE_TAP_MAX_ACCURACY_METERS =
+      20;
+
+    const TREASURE_TAP_POSITION_MAX_AGE_MS =
+      10000;
+
+    const REFETCH_TREASURE_DISTANCE =
+      300;
+
+    const TREASURE_SEARCH_RADIUS_METERS =
+      400;
+
+    const TREASURE_SEARCH_BOUNDARY_BUFFER_METERS =
+      60;
+
+    const TREASURE_ALGORITHM_VERSION =
+      'dead-end-v6';
+
+    const APP_VERSION =
+      'v1.1.2';
+
+    /*
+     * 候補地点から別の道路way線分までが
+     * この距離以内なら、
+     * OSM上でnodeを共有していなくても
+     * 実質的な接続・交差点とみなして除外する。
+     */
+    const NEAR_OTHER_WAY_METERS =
+      6;
+
 
     // Overpass APIのミラーサーバー群
+
     const OVERPASS_ENDPOINTS = [
+
       'https://overpass-api.de/api/interpreter',
+
       'https://overpass.kumi.systems/api/interpreter',
+
       'https://overpass.private.coffee/api/interpreter'
+
     ];
 
+
     let visitedPoints = [];
-    let treasureList = []; // { id, lat, lng, opened }
+
+    let treasureList = [];
+
     let gemCount = 0;
+
     let openedTreasureCount = 0;
+
     let treasureMarkers = {};
-    let isFetchingTreasures = false;
-    let lastFetchedLatLng = null; // 前回の宝箱読み込み地点
 
-    let fogOpacity = 1.0;
-    let currentLatLng = null;
-    let userMarker = null;
-    let currentAccuracy = null;
-    let currentPositionTimestamp = null;
+    let isFetchingTreasures =
+      false;
 
-    let wakeLock = null;
-    let watchId = null;
-    let isRenderPending = false;
+    let lastFetchedLatLng =
+      null;
 
-    // --- グラデーションスタンプ作成 ---
-    const STAMP_SIZE = 128;
-    const stampCanvas = document.createElement('canvas');
-    stampCanvas.width = STAMP_SIZE;
-    stampCanvas.height = STAMP_SIZE;
-    const stampCtx = stampCanvas.getContext('2d');
 
-    const grad = stampCtx.createRadialGradient(
-      STAMP_SIZE / 2, STAMP_SIZE / 2, (STAMP_SIZE / 2) * 0.4,
-      STAMP_SIZE / 2, STAMP_SIZE / 2, STAMP_SIZE / 2
+    let fogOpacity =
+      1.0;
+
+    let currentLatLng =
+      null;
+
+    let userMarker =
+      null;
+
+    let currentAccuracy =
+      null;
+
+    let currentPositionTimestamp =
+      null;
+
+
+    let wakeLock =
+      null;
+
+    let watchId =
+      null;
+
+    let isRenderPending =
+      false;
+
+
+    // ----------------------------------------------------
+    // グラデーションスタンプ作成
+    // ----------------------------------------------------
+
+    const STAMP_SIZE =
+      128;
+
+    const stampCanvas =
+      document.createElement('canvas');
+
+    stampCanvas.width =
+      STAMP_SIZE;
+
+    stampCanvas.height =
+      STAMP_SIZE;
+
+    const stampCtx =
+      stampCanvas.getContext('2d');
+
+
+    const grad =
+      stampCtx.createRadialGradient(
+
+        STAMP_SIZE / 2,
+        STAMP_SIZE / 2,
+        (STAMP_SIZE / 2) * 0.4,
+
+        STAMP_SIZE / 2,
+        STAMP_SIZE / 2,
+        STAMP_SIZE / 2
+
+      );
+
+
+    grad.addColorStop(
+      0,
+      'rgba(0, 0, 0, 1)'
     );
-    grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    stampCtx.fillStyle = grad;
+
+    grad.addColorStop(
+      1,
+      'rgba(0, 0, 0, 0)'
+    );
+
+
+    stampCtx.fillStyle =
+      grad;
+
     stampCtx.beginPath();
-    stampCtx.arc(STAMP_SIZE / 2, STAMP_SIZE / 2, STAMP_SIZE / 2, 0, Math.PI * 2);
+
+    stampCtx.arc(
+      STAMP_SIZE / 2,
+      STAMP_SIZE / 2,
+      STAMP_SIZE / 2,
+      0,
+      Math.PI * 2
+    );
+
     stampCtx.fill();
 
 
-    // --- 2. ローカルストレージからの復元 ---
+    // ----------------------------------------------------
+    // 2. ローカルストレージからの復元
+    // ----------------------------------------------------
+
     function loadSavedData() {
-      const savedPoints = localStorage.getItem(STORAGE_KEY_POINTS);
+
+      const savedPoints =
+        localStorage.getItem(
+          STORAGE_KEY_POINTS
+        );
+
+
       if (savedPoints) {
-        try { visitedPoints = JSON.parse(savedPoints); } catch (e) { visitedPoints = []; }
-      }
 
-      const savedOpacity = localStorage.getItem(STORAGE_KEY_OPACITY);
-      if (savedOpacity) {
-        fogOpacity = parseFloat(savedOpacity) / 100;
-        document.getElementById('opacity-slider').value = savedOpacity;
-        document.getElementById('opacity-val').innerText = `${savedOpacity}%`;
-      }
+        try {
 
-      const savedGemCount = localStorage.getItem(STORAGE_KEY_GEMS);
-      if (savedGemCount !== null) {
-        const parsedGems = parseInt(savedGemCount, 10);
-        gemCount = Number.isFinite(parsedGems) && parsedGems >= 0 ? parsedGems : 0;
-      }
+          visitedPoints =
+            JSON.parse(savedPoints);
 
-      const savedOpenedTreasureCount = localStorage.getItem(STORAGE_KEY_OPENED_TREASURES);
-      if (savedOpenedTreasureCount !== null) {
-        const parsedOpened = parseInt(savedOpenedTreasureCount, 10);
-        openedTreasureCount = Number.isFinite(parsedOpened) && parsedOpened >= 0 ? parsedOpened : 0;
-      }
+        } catch (e) {
 
-      const savedTreasureAlgorithmVersion = localStorage.getItem('fog_treasure_algorithm_version');
-      const savedTreasures = localStorage.getItem(STORAGE_KEY_TREASURES);
+          visitedPoints = [];
 
-      // 以前の宝箱判定は「wayの中で1回だけ現れるノード」を行き止まり扱いしていたため、
-      // 普通の道の途中にも大量の宝箱が保存されています。新しい判定結果と一致しない古い宝箱を安全に引き継げないため、アルゴリズム変更時は
-      // 宝箱配置を一度リセットします。
-      if (savedTreasureAlgorithmVersion !== TREASURE_ALGORITHM_VERSION) {
-        treasureList = [];
-        localStorage.removeItem(STORAGE_KEY_TREASURES);
-        localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
-      } else if (savedTreasures) {
-        try { 
-          const parsed = JSON.parse(savedTreasures);
-          // 破損データを除外して復元
-          treasureList = parsed.filter(t => typeof t.lat === 'number' && typeof t.lng === 'number' && !isNaN(t.lat) && !isNaN(t.lng));
-        } catch (e) { 
-          treasureList = [];
         }
+
       }
 
-      // 旧バージョンでは累計開封数を保存していなかったため、
-      // 初回だけ現在保存されている開封済み宝箱から引き継ぐ。
-      if (savedOpenedTreasureCount === null) {
-        openedTreasureCount = treasureList.filter(t => t.opened).length;
-        localStorage.setItem(STORAGE_KEY_OPENED_TREASURES, String(openedTreasureCount));
+
+      const savedOpacity =
+        localStorage.getItem(
+          STORAGE_KEY_OPACITY
+        );
+
+
+      if (savedOpacity) {
+
+        fogOpacity =
+          parseFloat(savedOpacity) / 100;
+
+        document.getElementById(
+          'opacity-slider'
+        ).value =
+          savedOpacity;
+
+        document.getElementById(
+          'opacity-val'
+        ).innerText =
+          `${savedOpacity}%`;
+
       }
+
+
+      const savedGemCount =
+        localStorage.getItem(
+          STORAGE_KEY_GEMS
+        );
+
+
+      if (
+        savedGemCount !== null
+      ) {
+
+        const parsedGems =
+          parseInt(
+            savedGemCount,
+            10
+          );
+
+        gemCount =
+          Number.isFinite(parsedGems) &&
+          parsedGems >= 0
+            ? parsedGems
+            : 0;
+
+      }
+
+
+      const savedOpenedTreasureCount =
+        localStorage.getItem(
+          STORAGE_KEY_OPENED_TREASURES
+        );
+
+
+      if (
+        savedOpenedTreasureCount !== null
+      ) {
+
+        const parsedOpened =
+          parseInt(
+            savedOpenedTreasureCount,
+            10
+          );
+
+        openedTreasureCount =
+          Number.isFinite(parsedOpened) &&
+          parsedOpened >= 0
+            ? parsedOpened
+            : 0;
+
+      }
+
+
+      const savedTreasureAlgorithmVersion =
+        localStorage.getItem(
+          'fog_treasure_algorithm_version'
+        );
+
+
+      const savedTreasures =
+        localStorage.getItem(
+          STORAGE_KEY_TREASURES
+        );
+
+
+      /*
+       * 以前の宝箱判定は
+       * 「wayの中で1回だけ現れるノード」を
+       * 行き止まり扱いしていたため、
+       * 普通の道の途中にも大量の宝箱が保存されています。
+       *
+       * 新しい判定結果と一致しない古い宝箱を
+       * 安全に引き継げないため、
+       * アルゴリズム変更時は宝箱配置を一度リセットします。
+       */
+
+      if (
+        savedTreasureAlgorithmVersion !==
+        TREASURE_ALGORITHM_VERSION
+      ) {
+
+        treasureList = [];
+
+        localStorage.removeItem(
+          STORAGE_KEY_TREASURES
+        );
+
+        localStorage.setItem(
+          'fog_treasure_algorithm_version',
+          TREASURE_ALGORITHM_VERSION
+        );
+
+      } else if (savedTreasures) {
+
+        try {
+
+          const parsed =
+            JSON.parse(
+              savedTreasures
+            );
+
+          treasureList =
+            parsed.filter(
+
+              t =>
+
+                typeof t.lat === 'number' &&
+
+                typeof t.lng === 'number' &&
+
+                !isNaN(t.lat) &&
+
+                !isNaN(t.lng)
+
+            );
+
+        } catch (e) {
+
+          treasureList = [];
+
+        }
+
+      }
+
+
+      /*
+       * 旧バージョンでは累計開封数を
+       * 保存していなかったため、
+       * 初回だけ現在保存されている
+       * 開封済み宝箱から引き継ぐ。
+       */
+
+      if (
+        savedOpenedTreasureCount === null
+      ) {
+
+        openedTreasureCount =
+          treasureList.filter(
+            t => t.opened
+          ).length;
+
+        localStorage.setItem(
+          STORAGE_KEY_OPENED_TREASURES,
+          String(openedTreasureCount)
+        );
+
+      }
+
     }
+
 
     loadSavedData();
 
-    // --- 3. 地図とCanvasの初期化 ---
-    const map = L.map('map', {
-      zoomControl: false,
-      rotate: true,
-      touchRotate: true,
-      rotateControl: {
-        position: 'topright',
-        closeOnZeroBearing: false
-      },
-      bearing: 0
-    }).setView([35.6812, 139.7671], 17);
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
+    // ----------------------------------------------------
+    // 3. 地図とCanvasの初期化
+    // ----------------------------------------------------
 
-    // --- 各レイヤーの重ね順（z-index）設定 ---
-    // 1. 宝箱ペイン (霧の上)
-    map.createPane('treasurePane');
-    map.getPane('treasurePane').style.zIndex = 600;
+    const map =
+      L.map('map', {
 
-    // 3. 自分/現在地ペイン (最前面)
-    map.createPane('userPane');
-    map.getPane('userPane').style.zIndex = 700;
+        zoomControl: false,
 
-    const canvas = document.getElementById('fog-canvas');
-    document.getElementById('map-container').appendChild(canvas);
-    const ctx = canvas.getContext('2d');
+        rotate: true,
 
-    function resizeCanvas() {
-      requestDrawFog();
-    }
-    window.addEventListener('resize', resizeCanvas);
+        touchRotate: true,
 
-    // --- 4. 霧の描画処理 ---
-    function drawFog() {
-      const size = map.getSize();
-      if (size.x === 0 || size.y === 0) return;
+        rotateControl: {
 
-      // Canvasはmap-container直下の固定オーバーレイなので、
-      // 常に画面（コンテナ）の左上から描画する。
-      if (canvas.width !== size.x || canvas.height !== size.y) {
-        canvas.width = size.x;
-        canvas.height = size.y;
-        canvas.style.width = size.x + 'px';
-        canvas.style.height = size.y + 'px';
-      }
+          position: 'topright',
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = `rgba(255, 255, 255, ${fogOpacity})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+          closeOnZeroBearing: false
 
-      ctx.globalCompositeOperation = 'destination-out';
+        },
 
-      const bounds = map.getBounds().pad(0.2);
+        bearing: 0
 
-      for (let i = 0; i < visitedPoints.length; i++) {
-        const point = visitedPoints[i];
-        if (!bounds.contains([point.lat, point.lng])) continue;
-
-        // Canvasはmap-container直下なので、描画座標はcontainerPointを使う。
-        const containerPoint = map.latLngToContainerPoint([point.lat, point.lng]);
-        const edgeLatLng = L.latLng(point.lat, point.lng + (point.radius / 111320));
-        const edgePoint = map.latLngToContainerPoint(edgeLatLng);
-        const pixelRadius = Math.max(15, Math.abs(edgePoint.x - containerPoint.x));
-
-        const diameter = pixelRadius * 2;
-        ctx.drawImage(
-          stampCanvas,
-          containerPoint.x - pixelRadius,
-          containerPoint.y - pixelRadius,
-          diameter,
-          diameter
-        );
-      }
-
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
-    function requestDrawFog() {
-      if (!isRenderPending) {
-        isRenderPending = true;
-        requestAnimationFrame(() => {
-          drawFog();
-          isRenderPending = false;
-        });
-      }
-    }
-
-    map.on('move zoom rotate viewreset resize load', requestDrawFog);
-    map.whenReady(() => requestDrawFog());
-    map.on('tileload tileloadstart', () => requestDrawFog());
-    requestDrawFog();
-
-    // 現在地はDOMベースのL.markerとして常時表示する。
-    // leaflet-rotateのPathレイヤー由来のズレを避けるため、
-    // 地図操作中に表示/非表示や再配置を強制せず、GPS更新時だけ座標を更新する。
-    function updateUserMarker() {
-      if (!currentLatLng) return;
-
-      if (!userMarker) {
-        const dotIcon = L.divIcon({
-          className: '',
-          html: '<div class="user-location-dot"></div>',
-          iconSize: [16, 16],
-          iconAnchor: [8, 8]
-        });
-
-        userMarker = L.marker(currentLatLng, {
-          icon: dotIcon,
-          pane: 'userPane',
-          interactive: false
-        }).addTo(map);
-      } else {
-        userMarker.setLatLng(currentLatLng);
-      }
-    }
-
-    if (visitedPoints.length > 0) {
-      const last = visitedPoints[visitedPoints.length - 1];
-      map.setView([last.lat, last.lng], 17);
-    }
-
-    // --- 5. 宝箱表示・Overpass API描画処理 ---
-    function renderTreasures() {
-      treasureList.forEach(t => {
-        const iconSymbol = t.opened ? '✅' : '🎁';
-        
-        if (treasureMarkers[t.id]) {
-          const existingMarker = treasureMarkers[t.id];
-
-          // Markerオブジェクトが残っていても、地図から外れている場合があります。
-          // その場合は再度mapへ追加して表示を復元します。
-          if (!map.hasLayer(existingMarker)) {
-            existingMarker.addTo(map);
-          }
-
-          const el = existingMarker.getElement();
-          if (el) {
-            el.innerHTML = iconSymbol;
-            el.classList.toggle('opened', !!t.opened);
-          }
-          return;
-        }
-
-        const customIcon = L.divIcon({
-          className: `treasure-marker ${t.opened ? 'opened' : ''}`,
-          html: iconSymbol,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        // 宝箱専用ペイン (treasurePane) に追加
-        const marker = L.marker([t.lat, t.lng], {
-          icon: customIcon,
-          pane: 'treasurePane'
-        }).addTo(map);
-
-        treasureMarkers[t.id] = marker;
-
-        // 宝箱は「近くにいて、GPS精度が十分高い」場合だけタップで開ける
-        marker.on('click', () => {
-          tryOpenTreasure(t.id);
-        });
-      });
-
-      updateTreasureUI();
-      requestDrawFog();
-    }
-
-    function updateTreasureUI() {
-      document.getElementById('treasure-count').innerText = `🎁 ${openedTreasureCount}個`;
-      const gemElement = document.getElementById('gem-count');
-      if (gemElement) gemElement.innerText = `💎 ${gemCount}個`;
-    }
-
-    async function fetchDeadEndTreasures(lat, lng) {
-      if (isFetchingTreasures) return;
-      isFetchingTreasures = true;
-
-      showNotification('🔍 周辺の宝箱を検索中...');
-
-      const radius = TREASURE_SEARCH_RADIUS_METERS;
-      const query = `
-        [out:json][timeout:15];
-        (
-          way["highway"~"residential|service|footway|path|living_street"](around:${radius},${lat},${lng});
-        );
-        out body;
-        >;
-        out skel qt;
-      `;
-
-      let data = null;
-      for (const endpoint of OVERPASS_ENDPOINTS) {
-        try {
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: 'data=' + encodeURIComponent(query)
-          });
-          if (res.ok) {
-            data = await res.json();
-            break;
-          }
-        } catch (e) {
-          console.warn(`Endpoint ${endpoint} failed, trying next...`);
-        }
-      }
-
-      if (!data || !data.elements) {
-        console.warn('道路データを取得できなかったため、今回は宝箱を追加しません');
-        showNotification('⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした');
-        isFetchingTreasures = false;
-        return;
-      }
-
-      try {
-        const nodes = {};
-        const ways = [];
-
-        data.elements.forEach(el => {
-          if (el.type === 'node' && Number.isFinite(el.lat) && Number.isFinite(el.lon)) {
-            nodes[el.id] = { lat: el.lat, lng: el.lon };
-          }
-        });
-
-        data.elements.forEach(el => {
-          if (el.type === 'way' && Array.isArray(el.nodes) && el.nodes.length >= 2) {
-            const validNodes = el.nodes.filter(id => nodes[id]);
-            if (validNodes.length >= 2) ways.push(validNodes);
-          }
-        });
-
-        // OSMでは同じ交差点・接続部でも、道路ごとに別nodeへ分割されることがあります。
-        // そのため「nodeの接続数」だけではT字路/Y字路/行き止まりを正しく判定できません。
-        // 近接nodeを小さなクラスタにまとめ、クラスタ間の接続数で判定します。
-        const CLUSTER_RADIUS_METERS = 4;
-        const clusterList = [];
-        const nodeToCluster = {};
-
-        for (const [id, node] of Object.entries(nodes)) {
-          let assigned = -1;
-          for (let i = 0; i < clusterList.length; i++) {
-            if (calculateDistance(node.lat, node.lng, clusterList[i].lat, clusterList[i].lng) <= CLUSTER_RADIUS_METERS) {
-              assigned = i;
-              break;
-            }
-          }
-
-          if (assigned === -1) {
-            assigned = clusterList.length;
-            clusterList.push({ lat: node.lat, lng: node.lng, members: [] });
-          }
-
-          clusterList[assigned].members.push(id);
-          // メンバー追加後、代表点を平均位置へ更新
-          const members = clusterList[assigned].members;
-          let sumLat = 0;
-          let sumLng = 0;
-          for (const memberId of members) {
-            sumLat += nodes[memberId].lat;
-            sumLng += nodes[memberId].lng;
-          }
-          clusterList[assigned].lat = sumLat / members.length;
-          clusterList[assigned].lng = sumLng / members.length;
-          nodeToCluster[id] = assigned;
-        }
-
-        const clusterAdjacency = clusterList.map(() => new Set());
-
-        for (const way of ways) {
-          for (let i = 0; i < way.length - 1; i++) {
-            const aCluster = nodeToCluster[way[i]];
-            const bCluster = nodeToCluster[way[i + 1]];
-            if (aCluster === undefined || bCluster === undefined || aCluster === bCluster) continue;
-            clusterAdjacency[aCluster].add(bCluster);
-            clusterAdjacency[bCluster].add(aCluster);
-          }
-        }
-
-        // 検索端の切れた道路を行き止まりと誤認しないようにする。
-        const searchRadius = radius - TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
-        const deadEndCandidates = [];
-
-        // OSMでは、実世界では接続している歩道・小道・サービス道路などが
-        // nodeを共有していないことがあります。
-        // そのため「別wayの線分までの距離」も調べ、幾何学的に近い場合は
-        // 実質的なT字路/Y字路/交差点として行き止まり候補から除外します。
-        function pointToSegmentDistanceMeters(p, a, b) {
-          const latRef = p.lat;
-          const mPerDegLat = 111320;
-          const mPerDegLng = 111320 * Math.cos(latRef * Math.PI / 180);
-
-          const toXY = (pt) => ({
-            x: (pt.lng - p.lng) * mPerDegLng,
-            y: (pt.lat - p.lat) * mPerDegLat
-          });
-
-          const A = toXY(a);
-          const B = toXY(b);
-          const ABx = B.x - A.x;
-          const ABy = B.y - A.y;
-          const lenSq = ABx * ABx + ABy * ABy;
-          let t = lenSq === 0
-            ? 0
-            : ((-A.x) * ABx + (-A.y) * ABy) / lenSq;
-          t = Math.max(0, Math.min(1, t));
-
-          const closestX = A.x + ABx * t;
-          const closestY = A.y + ABy * t;
-          return Math.hypot(closestX, closestY);
-        }
-
-        function isNearOtherWaySegment(candidate, ownClusterId) {
-          for (const way of ways) {
-            for (let i = 0; i < way.length - 1; i++) {
-              const aId = way[i];
-              const bId = way[i + 1];
-              const aCluster = nodeToCluster[aId];
-              const bCluster = nodeToCluster[bId];
-
-              // 自分のクラスタに接続する線分は、通常の隣接関係として
-              // すでにclusterAdjacencyで評価しているのでスキップ。
-              if (aCluster === ownClusterId || bCluster === ownClusterId) continue;
-
-              const a = nodes[aId];
-              const b = nodes[bId];
-              if (!a || !b) continue;
-
-              if (pointToSegmentDistanceMeters(candidate, a, b) <= NEAR_OTHER_WAY_METERS) {
-                return true;
-              }
-            }
-          }
-          return false;
-        }
-
-        clusterList.forEach((cluster, clusterId) => {
-          const neighbors = clusterAdjacency[clusterId];
-          if (neighbors.size !== 1) return;
-
-          const distanceFromSearchCenter = calculateDistance(lat, lng, cluster.lat, cluster.lng);
-          if (distanceFromSearchCenter > searchRadius) return;
-
-          const neighborId = [...neighbors][0];
-          const neighbor = clusterList[neighborId];
-
-          // 代表点が近接node平均で道路の少し内側へ寄ることがあるため、
-          // クラスタ内で「隣接クラスタから最も遠いnode」を行き止まり位置として採用。
-          let bestNode = { ...cluster };
-          let bestDistance = -1;
-          for (const memberId of cluster.members) {
-            const node = nodes[memberId];
-            const d = calculateDistance(node.lat, node.lng, neighbor.lat, neighbor.lng);
-            if (d > bestDistance) {
-              bestDistance = d;
-              bestNode = node;
-            }
-          }
-
-          // nodeを共有していない道路が近くを横切っている場合は、
-          // 実質的なT字路/Y字路/交差点として除外する。
-          if (isNearOtherWaySegment(bestNode, clusterId)) return;
-
-          deadEndCandidates.push({
-            id: `cluster_${clusterId}`,
-            lat: bestNode.lat,
-            lng: bestNode.lng
-          });
-        });
-
-        // 同一行き止まりを複数回拾った場合は1個にまとめる。
-        const uniqueDeadEnds = [];
-        for (const candidate of deadEndCandidates) {
-          if (!uniqueDeadEnds.some(c => calculateDistance(c.lat, c.lng, candidate.lat, candidate.lng) < 15)) {
-            uniqueDeadEnds.push(candidate);
-          }
-        }
-
-        // 今回の検索範囲内にある既存宝箱は、今回も行き止まりとして検出された場所だけ残す。
-        const filteredTreasures = treasureList.filter(t => {
-          if (calculateDistance(lat, lng, t.lat, t.lng) > searchRadius) return true;
-          return uniqueDeadEnds.some(c => calculateDistance(t.lat, t.lng, c.lat, c.lng) < 20);
-        });
-
-        const keptIds = new Set(filteredTreasures.map(t => t.id));
-        Object.keys(treasureMarkers).forEach(id => {
-          if (!keptIds.has(id)) {
-            map.removeLayer(treasureMarkers[id]);
-            delete treasureMarkers[id];
-          }
-        });
-        treasureList = filteredTreasures;
-
-        let newAddedCount = 0;
-        for (const candidate of uniqueDeadEnds) {
-          const exists = treasureList.some(t => calculateDistance(t.lat, t.lng, candidate.lat, candidate.lng) < 15);
-          if (!exists) {
-            treasureList.push({
-              id: 'tr_' + candidate.id,
-              lat: candidate.lat,
-              lng: candidate.lng,
-              opened: false
-            });
-            newAddedCount++;
-          }
-        }
-
-        localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
-        localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
-
-        if (newAddedCount > 0) {
-          showNotification(`🎁 宝箱を ${newAddedCount} 個発見！`);
-        } else if (uniqueDeadEnds.length === 0) {
-          showNotification('🔍 この周辺に宝箱は見つかりませんでした');
-        } else {
-          showNotification(`🔍 宝箱を ${uniqueDeadEnds.length} 箇所確認しました`);
-        }
-
-        renderTreasures();
-      } catch (err) {
-        console.error('解析エラー:', err);
-        showNotification('⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした');
-      } finally {
-        isFetchingTreasures = false;
-      }
-    }
-
-    function tryOpenTreasure(treasureId) {
-      const treasure = treasureList.find(t => t.id === treasureId);
-      if (!treasure || treasure.opened) return;
-
-      // GPS位置情報が取得できていない場合
-      if (!currentLatLng || !Number.isFinite(currentAccuracy) || !currentPositionTimestamp) {
-        showNotification('📍 現在地を取得中です。少し待ってからもう一度タップしてください');
-        return;
-      }
-
-      // 古い位置情報は使わない
-      const positionAge = Date.now() - currentPositionTimestamp;
-      if (positionAge > TREASURE_TAP_POSITION_MAX_AGE_MS) {
-        showNotification('📍 現在地の情報が古くなっています。少し待ってからもう一度タップしてください');
-        return;
-      }
-
-      // GPS精度が低い状態では絶対に開けない
-      if (currentAccuracy > TREASURE_TAP_MAX_ACCURACY_METERS) {
-        showNotification(`📍 GPS精度が低いため開けません（現在 ±${Math.round(currentAccuracy)}m）`);
-        return;
-      }
-
-      const dist = calculateDistance(
-        currentLatLng[0],
-        currentLatLng[1],
-        treasure.lat,
-        treasure.lng
+      })
+      .setView(
+        [35.6812, 139.7671],
+        17
       );
 
-      // GPSの誤差を考慮し、"宝箱までの距離 + GPS誤差" が25m以内のときだけ開ける
-      const safeDistance = dist + currentAccuracy;
-      if (safeDistance > TREASURE_GET_RADIUS_METERS) {
-        showNotification(`🎁 宝箱に近づいてください（約${Math.round(dist)}m）`);
+
+    L.tileLayer(
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {
+
+        maxZoom: 19,
+
+        attribution:
+          '&copy; OpenStreetMap'
+
+      }
+    ).addTo(map);
+
+
+    // ----------------------------------------------------
+    // 各レイヤーの重ね順
+    // ----------------------------------------------------
+
+    // 宝箱ペイン
+
+    map.createPane(
+      'treasurePane'
+    );
+
+    map.getPane(
+      'treasurePane'
+    ).style.zIndex =
+      600;
+
+
+    // 自分 / 現在地ペイン
+
+    map.createPane(
+      'userPane'
+    );
+
+    map.getPane(
+      'userPane'
+    ).style.zIndex =
+      700;
+
+
+    const canvas =
+      document.getElementById(
+        'fog-canvas'
+      );
+
+
+    document
+      .getElementById(
+        'map-container'
+      )
+      .appendChild(
+        canvas
+      );
+
+
+    const ctx =
+      canvas.getContext('2d');
+
+
+    function resizeCanvas() {
+
+      requestDrawFog();
+
+    }
+
+
+    window.addEventListener(
+      'resize',
+      resizeCanvas
+    );
+
+
+    // ----------------------------------------------------
+    // 4. 霧の描画処理
+    // ----------------------------------------------------
+
+    function drawFog() {
+
+      const size =
+        map.getSize();
+
+
+      if (
+        size.x === 0 ||
+        size.y === 0
+      ) {
+
         return;
+
       }
 
-      treasure.opened = true;
-      openedTreasureCount += 1;
-      gemCount += 1;
-      localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
-      localStorage.setItem(STORAGE_KEY_OPENED_TREASURES, String(openedTreasureCount));
-      localStorage.setItem(STORAGE_KEY_GEMS, String(gemCount));
-      localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
-      showNotification('🎁 宝箱を開けました！ 💎 ジェムを1個獲得！');
-      renderTreasures();
+
+      /*
+       * Canvasはmap-container直下の
+       * 固定オーバーレイなので、
+       * 常に画面の左上から描画。
+       */
+
+      if (
+        canvas.width !== size.x ||
+        canvas.height !== size.y
+      ) {
+
+        canvas.width =
+          size.x;
+
+        canvas.height =
+          size.y;
+
+        canvas.style.width =
+          size.x + 'px';
+
+        canvas.style.height =
+          size.y + 'px';
+
+      }
+
+
+      ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+
+      ctx.fillStyle =
+        `rgba(255, 255, 255, ${fogOpacity})`;
+
+
+      ctx.fillRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+
+      ctx.globalCompositeOperation =
+        'destination-out';
+
+
+      const bounds =
+        map
+          .getBounds()
+          .pad(0.2);
+
+
+      for (
+        let i = 0;
+        i < visitedPoints.length;
+        i++
+      ) {
+
+        const point =
+          visitedPoints[i];
+
+
+        if (
+          !bounds.contains(
+            [
+              point.lat,
+              point.lng
+            ]
+          )
+        ) {
+
+          continue;
+
+        }
+
+
+        const containerPoint =
+          map.latLngToContainerPoint(
+            [
+              point.lat,
+              point.lng
+            ]
+          );
+
+
+        const edgeLatLng =
+          L.latLng(
+
+            point.lat,
+
+            point.lng +
+              (
+                point.radius /
+                111320
+              )
+
+          );
+
+
+        const edgePoint =
+          map.latLngToContainerPoint(
+            edgeLatLng
+          );
+
+
+        const pixelRadius =
+          Math.max(
+
+            15,
+
+            Math.abs(
+              edgePoint.x -
+              containerPoint.x
+            )
+
+          );
+
+
+        const diameter =
+          pixelRadius * 2;
+
+
+        ctx.drawImage(
+
+          stampCanvas,
+
+          containerPoint.x -
+            pixelRadius,
+
+          containerPoint.y -
+            pixelRadius,
+
+          diameter,
+
+          diameter
+
+        );
+
+      }
+
+
+      ctx.globalCompositeOperation =
+        'source-over';
+
     }
 
-    function showNotification(msg) {
-      const notif = document.getElementById('notification');
-      notif.innerText = msg;
-      notif.style.display = 'block';
-      setTimeout(() => {
-        notif.style.display = 'none';
-      }, 3500);
+
+    function requestDrawFog() {
+
+      if (
+        !isRenderPending
+      ) {
+
+        isRenderPending =
+          true;
+
+
+        requestAnimationFrame(
+
+          () => {
+
+            drawFog();
+
+            isRenderPending =
+              false;
+
+          }
+
+        );
+
+      }
+
     }
+
+
+    map.on(
+      'move zoom rotate viewreset resize load',
+      requestDrawFog
+    );
+
+
+    map.whenReady(
+      () =>
+        requestDrawFog()
+    );
+
+
+    map.on(
+      'tileload tileloadstart',
+      () =>
+        requestDrawFog()
+    );
+
+
+    requestDrawFog();
+
+
+    // ----------------------------------------------------
+    // 現在地マーカー
+    // ----------------------------------------------------
+
+    /*
+     * 現在地はDOMベースのL.markerとして
+     * 常時表示する。
+     *
+     * leaflet-rotateのPathレイヤー由来の
+     * ズレを避けるため、
+     * 地図操作中に表示/非表示や
+     * 再配置を強制せず、
+     * GPS更新時だけ座標を更新。
+     */
+
+    function updateUserMarker() {
+
+      if (!currentLatLng) {
+
+        return;
+
+      }
+
+
+      if (!userMarker) {
+
+        const dotIcon =
+          L.divIcon({
+
+            className: '',
+
+            html:
+              '<div class="user-location-dot"></div>',
+
+            iconSize:
+              [16, 16],
+
+            iconAnchor:
+              [8, 8]
+
+          });
+
+
+        userMarker =
+          L.marker(
+            currentLatLng,
+            {
+
+              icon:
+                dotIcon,
+
+              pane:
+                'userPane',
+
+              interactive:
+                false
+
+            }
+          )
+          .addTo(map);
+
+
+      } else {
+
+        userMarker.setLatLng(
+          currentLatLng
+        );
+
+      }
+
+    }
+
+
+    if (
+      visitedPoints.length > 0
+    ) {
+
+      const last =
+        visitedPoints[
+          visitedPoints.length - 1
+        ];
+
+
+      map.setView(
+
+        [
+          last.lat,
+          last.lng
+        ],
+
+        17
+
+      );
+
+    }
+
+
+    // ----------------------------------------------------
+    // 5. 宝箱表示・Overpass API描画処理
+    // ----------------------------------------------------
+
+    /*
+     * 宝箱IDはclusterIdではなく
+     * 座標から生成する。
+     *
+     * 検索範囲や取得順が変わっても
+     * 同じ場所には同じIDが付き、
+     * 別の場所の宝箱とIDが衝突しないようにする。
+     */
+
+    function createTreasureId(
+      lat,
+      lng
+    ) {
+
+      const latKey =
+        Math.round(
+          lat * 1000000
+        );
+
+      const lngKey =
+        Math.round(
+          lng * 1000000
+        );
+
+
+      return (
+        `tr_${latKey}_${lngKey}`
+      );
+
+    }
+
+
+    function renderTreasures() {
+
+      treasureList.forEach(
+
+        t => {
+
+          const iconSymbol =
+            t.opened
+              ? '✅'
+              : '🎁';
+
+
+          /*
+           * 既にMarkerオブジェクトが
+           * 存在する場合
+           */
+
+          if (
+            treasureMarkers[t.id]
+          ) {
+
+            const existingMarker =
+              treasureMarkers[t.id];
+
+
+            /*
+             * Markerオブジェクトが残っていても、
+             * 地図から外れている場合があります。
+             *
+             * その場合は再度mapへ追加して
+             * 表示を復元します。
+             */
+
+            if (
+              !map.hasLayer(
+                existingMarker
+              )
+            ) {
+
+              existingMarker.addTo(
+                map
+              );
+
+            }
+
+
+            const el =
+              existingMarker.getElement();
+
+
+            if (el) {
+
+              el.innerHTML =
+                iconSymbol;
+
+              el.classList.toggle(
+                'opened',
+                !!t.opened
+              );
+
+            }
+
+
+            return;
+
+          }
+
+
+          const customIcon =
+            L.divIcon({
+
+              className:
+                `treasure-marker ${
+                  t.opened
+                    ? 'opened'
+                    : ''
+                }`,
+
+              html:
+                iconSymbol,
+
+              iconSize:
+                [30, 30],
+
+              iconAnchor:
+                [15, 15]
+
+            });
+
+
+          /*
+           * 宝箱専用ペインに追加
+           */
+
+          const marker =
+            L.marker(
+
+              [
+                t.lat,
+                t.lng
+              ],
+
+              {
+
+                icon:
+                  customIcon,
+
+                pane:
+                  'treasurePane'
+
+              }
+
+            ).addTo(map);
+
+
+          treasureMarkers[t.id] =
+            marker;
+
+
+          /*
+           * 宝箱は
+           * 「近くにいて、
+           * GPS精度が十分高い」
+           * 場合だけタップで開ける
+           */
+
+          marker.on(
+
+            'click',
+
+            () => {
+
+              tryOpenTreasure(
+                t.id
+              );
+
+            }
+
+          );
+
+        }
+
+      );
+
+
+      updateTreasureUI();
+
+      requestDrawFog();
+
+    }
+
+
+    function updateTreasureUI() {
+
+      document.getElementById(
+        'treasure-count'
+      ).innerText =
+        `🎁 ${openedTreasureCount}個`;
+
+
+      const gemElement =
+        document.getElementById(
+          'gem-count'
+        );
+
+
+      if (gemElement) {
+
+        gemElement.innerText =
+          `💎 ${gemCount}個`;
+
+      }
+
+    }
+
+
+    async function fetchDeadEndTreasures(
+      lat,
+      lng
+    ) {
+
+      if (
+        isFetchingTreasures
+      ) {
+
+        return;
+
+      }
+
+
+      isFetchingTreasures =
+        true;
+
+
+      showNotification(
+        '🔍 周辺の宝箱を検索中...'
+      );
+
+
+      const radius =
+        TREASURE_SEARCH_RADIUS_METERS;
+
+
+      const query = `
+
+        [out:json][timeout:15];
+
+        (
+
+          way[
+            "highway"~"residential|service|footway|path|living_street"
+          ](
+            around:${radius},
+            ${lat},
+            ${lng}
+          );
+
+        );
+
+        out body;
+
+        >;
+
+        out skel qt;
+
+      `;
+
+
+      let data =
+        null;
+
+
+      for (
+        const endpoint
+        of OVERPASS_ENDPOINTS
+      ) {
+
+        try {
+
+          const res =
+            await fetch(
+
+              endpoint,
+
+              {
+
+                method:
+                  'POST',
+
+                headers:
+                  {
+                    'Content-Type':
+                      'application/x-www-form-urlencoded'
+                  },
+
+                body:
+                  'data=' +
+                  encodeURIComponent(
+                    query
+                  )
+
+              }
+
+            );
+
+
+          if (
+            res.ok
+          ) {
+
+            data =
+              await res.json();
+
+            break;
+
+          }
+
+        } catch (e) {
+
+          console.warn(
+            `Endpoint ${endpoint} failed, trying next...`
+          );
+
+        }
+
+      }
+
+
+      if (
+        !data ||
+        !data.elements
+      ) {
+
+        console.warn(
+          '道路データを取得できなかったため、今回は宝箱を追加しません'
+        );
+
+
+        showNotification(
+          '⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした'
+        );
+
+
+        isFetchingTreasures =
+          false;
+
+
+        return;
+
+      }
+
+
+      try {
+
+        const nodes =
+          {};
+
+        const ways =
+          [];
+
+
+        data.elements.forEach(
+
+          el => {
+
+            if (
+
+              el.type === 'node' &&
+
+              Number.isFinite(
+                el.lat
+              ) &&
+
+              Number.isFinite(
+                el.lon
+              )
+
+            ) {
+
+              nodes[el.id] = {
+
+                lat:
+                  el.lat,
+
+                lng:
+                  el.lon
+
+              };
+
+            }
+
+          }
+
+        );
+
+
+        data.elements.forEach(
+
+          el => {
+
+            if (
+
+              el.type === 'way' &&
+
+              Array.isArray(
+                el.nodes
+              ) &&
+
+              el.nodes.length >= 2
+
+            ) {
+
+              const validNodes =
+                el.nodes.filter(
+                  id =>
+                    nodes[id]
+                );
+
+
+              if (
+                validNodes.length >= 2
+              ) {
+
+                ways.push(
+                  validNodes
+                );
+
+              }
+
+            }
+
+          }
+
+        );
+
+
+        /*
+         * OSMでは同じ交差点・接続部でも、
+         * 道路ごとに別nodeへ分割されることがあります。
+         *
+         * そのため「nodeの接続数」だけでは
+         * T字路/Y字路/行き止まりを
+         * 正しく判定できません。
+         *
+         * 近接nodeを小さなクラスタにまとめ、
+         * クラスタ間の接続数で判定します。
+         */
+
+        const CLUSTER_RADIUS_METERS =
+          4;
+
+
+        const clusterList =
+          [];
+
+
+        const nodeToCluster =
+          {};
+
+
+        for (
+          const [id, node]
+          of Object.entries(nodes)
+        ) {
+
+          let assigned =
+            -1;
+
+
+          for (
+            let i = 0;
+            i < clusterList.length;
+            i++
+          ) {
+
+            if (
+
+              calculateDistance(
+
+                node.lat,
+                node.lng,
+
+                clusterList[i].lat,
+                clusterList[i].lng
+
+              )
+
+              <=
+              CLUSTER_RADIUS_METERS
+
+            ) {
+
+              assigned =
+                i;
+
+              break;
+
+            }
+
+          }
+
+
+          if (
+            assigned === -1
+          ) {
+
+            assigned =
+              clusterList.length;
+
+
+            clusterList.push({
+
+              lat:
+                node.lat,
+
+              lng:
+                node.lng,
+
+              members:
+                []
+
+            });
+
+          }
+
+
+          clusterList[
+            assigned
+          ].members.push(
+            id
+          );
+
+
+          /*
+           * メンバー追加後、
+           * 代表点を平均位置へ更新
+           */
+
+          const members =
+            clusterList[
+              assigned
+            ].members;
+
+
+          let sumLat =
+            0;
+
+          let sumLng =
+            0;
+
+
+          for (
+            const memberId
+            of members
+          ) {
+
+            sumLat +=
+              nodes[
+                memberId
+              ].lat;
+
+            sumLng +=
+              nodes[
+                memberId
+              ].lng;
+
+          }
+
+
+          clusterList[
+            assigned
+          ].lat =
+            sumLat /
+            members.length;
+
+
+          clusterList[
+            assigned
+          ].lng =
+            sumLng /
+            members.length;
+
+
+          nodeToCluster[id] =
+            assigned;
+
+        }
+
+
+        const clusterAdjacency =
+          clusterList.map(
+            () =>
+              new Set()
+          );
+
+
+        for (
+          const way
+          of ways
+        ) {
+
+          for (
+            let i = 0;
+            i <
+            way.length - 1;
+            i++
+          ) {
+
+            const aCluster =
+              nodeToCluster[
+                way[i]
+              ];
+
+
+            const bCluster =
+              nodeToCluster[
+                way[i + 1]
+              ];
+
+
+            if (
+
+              aCluster ===
+              undefined ||
+
+              bCluster ===
+              undefined ||
+
+              aCluster ===
+              bCluster
+
+            ) {
+
+              continue;
+
+            }
+
+
+            clusterAdjacency[
+              aCluster
+            ].add(
+              bCluster
+            );
+
+
+            clusterAdjacency[
+              bCluster
+            ].add(
+              aCluster
+            );
+
+          }
+
+        }
+
+
+        /*
+         * 検索端の切れた道路を
+         * 行き止まりと誤認しないようにする。
+         */
+
+        const searchRadius =
+          radius -
+          TREASURE_SEARCH_BOUNDARY_BUFFER_METERS;
+
+
+        const deadEndCandidates =
+          [];
+
+
+        /*
+         * OSMでは、実世界では接続している
+         * 歩道・小道・サービス道路などが
+         * nodeを共有していないことがあります。
+         *
+         * そのため「別wayの線分までの距離」
+         * も調べ、幾何学的に近い場合は
+         * 実質的なT字路/Y字路/交差点として
+         * 行き止まり候補から除外します。
+         */
+
+        function pointToSegmentDistanceMeters(
+          p,
+          a,
+          b
+        ) {
+
+          const latRef =
+            p.lat;
+
+
+          const mPerDegLat =
+            111320;
+
+
+          const mPerDegLng =
+            111320 *
+            Math.cos(
+              latRef *
+              Math.PI /
+              180
+            );
+
+
+          const toXY =
+            pt => ({
+
+              x:
+                (
+                  pt.lng -
+                  p.lng
+                ) *
+                mPerDegLng,
+
+              y:
+                (
+                  pt.lat -
+                  p.lat
+                ) *
+                mPerDegLat
+
+            });
+
+
+          const A =
+            toXY(a);
+
+
+          const B =
+            toXY(b);
+
+
+          const ABx =
+            B.x -
+            A.x;
+
+
+          const ABy =
+            B.y -
+            A.y;
+
+
+          const lenSq =
+            ABx * ABx +
+            ABy * ABy;
+
+
+          let t =
+
+            lenSq === 0
+
+              ? 0
+
+              :
+
+                (
+                  (-A.x) *
+                  ABx +
+
+                  (-A.y) *
+                  ABy
+                ) /
+                lenSq;
+
+
+          t =
+            Math.max(
+              0,
+              Math.min(
+                1,
+                t
+              )
+            );
+
+
+          const closestX =
+            A.x +
+            ABy * 0 +
+            ABx * t;
+
+
+          const closestY =
+            A.y +
+            ABy * t;
+
+
+          return Math.hypot(
+            closestX,
+            closestY
+          );
+
+        }
+
+
+        function isNearOtherWaySegment(
+          candidate,
+          ownClusterId
+        ) {
+
+          for (
+            const way
+            of ways
+          ) {
+
+            for (
+              let i = 0;
+              i <
+              way.length - 1;
+              i++
+            ) {
+
+              const aId =
+                way[i];
+
+
+              const bId =
+                way[i + 1];
+
+
+              const aCluster =
+                nodeToCluster[
+                  aId
+                ];
+
+
+              const bCluster =
+                nodeToCluster[
+                  bId
+                ];
+
+
+              /*
+               * 自分のクラスタに接続する線分は、
+               * 通常の隣接関係として
+               * clusterAdjacencyで評価しているのでスキップ。
+               */
+
+              if (
+
+                aCluster ===
+                ownClusterId ||
+
+                bCluster ===
+                ownClusterId
+
+              ) {
+
+                continue;
+
+              }
+
+
+              const a =
+                nodes[aId];
+
+
+              const b =
+                nodes[bId];
+
+
+              if (
+                !a ||
+                !b
+              ) {
+
+                continue;
+
+              }
+
+
+              if (
+
+                pointToSegmentDistanceMeters(
+                  candidate,
+                  a,
+                  b
+                )
+
+                <=
+                NEAR_OTHER_WAY_METERS
+
+              ) {
+
+                return true;
+
+              }
+
+            }
+
+          }
+
+
+          return false;
+
+        }
+
+
+        clusterList.forEach(
+
+          (
+            cluster,
+            clusterId
+          ) => {
+
+            const neighbors =
+              clusterAdjacency[
+                clusterId
+              ];
+
+
+            if (
+              neighbors.size !== 1
+            ) {
+
+              return;
+
+            }
+
+
+            const distanceFromSearchCenter =
+              calculateDistance(
+
+                lat,
+                lng,
+
+                cluster.lat,
+                cluster.lng
+
+              );
+
+
+            if (
+              distanceFromSearchCenter >
+              searchRadius
+            ) {
+
+              return;
+
+            }
+
+
+            const neighborId =
+              [
+                ...neighbors
+              ][0];
+
+
+            const neighbor =
+              clusterList[
+                neighborId
+              ];
+
+
+            /*
+             * 代表点が近接node平均で
+             * 道路の少し内側へ寄ることがあるため、
+             * クラスタ内で
+             * 「隣接クラスタから最も遠いnode」
+             * を行き止まり位置として採用。
+             */
+
+            let bestNode =
+              {
+                ...cluster
+              };
+
+
+            let bestDistance =
+              -1;
+
+
+            for (
+              const memberId
+              of cluster.members
+            ) {
+
+              const node =
+                nodes[
+                  memberId
+                ];
+
+
+              const d =
+                calculateDistance(
+
+                  node.lat,
+                  node.lng,
+
+                  neighbor.lat,
+                  neighbor.lng
+
+                );
+
+
+              if (
+                d >
+                bestDistance
+              ) {
+
+                bestDistance =
+                  d;
+
+                bestNode =
+                  node;
+
+              }
+
+            }
+
+
+            /*
+             * nodeを共有していない道路が
+             * 近くを横切っている場合は、
+             * 実質的なT字路/Y字路/交差点として除外。
+             */
+
+            if (
+              isNearOtherWaySegment(
+                bestNode,
+                clusterId
+              )
+            ) {
+
+              return;
+
+            }
+
+
+            deadEndCandidates.push({
+
+              id:
+                `cluster_${clusterId}`,
+
+              lat:
+                bestNode.lat,
+
+              lng:
+                bestNode.lng
+
+            });
+
+          }
+
+        );
+
+
+        /*
+         * 同一行き止まりを複数回拾った場合は
+         * 1個にまとめる。
+         */
+
+        const uniqueDeadEnds =
+          [];
+
+
+        for (
+          const candidate
+          of deadEndCandidates
+        ) {
+
+          if (
+
+            !uniqueDeadEnds.some(
+
+              c =>
+
+                calculateDistance(
+
+                  c.lat,
+                  c.lng,
+
+                  candidate.lat,
+                  candidate.lng
+
+                ) < 15
+
+            )
+
+          ) {
+
+            uniqueDeadEnds.push(
+              candidate
+            );
+
+          }
+
+        }
+
+
+        /*
+         * 今回の検索範囲内にある既存宝箱は、
+         * 今回も行き止まりとして検出された場所だけ残す。
+         */
+
+        const filteredTreasures =
+          treasureList.filter(
+
+            t => {
+
+              if (
+
+                calculateDistance(
+
+                  lat,
+                  lng,
+
+                  t.lat,
+                  t.lng
+
+                ) > searchRadius
+
+              ) {
+
+                return true;
+
+              }
+
+
+              return uniqueDeadEnds.some(
+
+                c =>
+
+                  calculateDistance(
+
+                    t.lat,
+                    t.lng,
+
+                    c.lat,
+                    c.lng
+
+                  ) < 20
+
+              );
+
+            }
+
+          );
+
+
+        const keptIds =
+          new Set(
+            filteredTreasures.map(
+              t => t.id
+            )
+          );
+
+
+        Object.keys(
+          treasureMarkers
+        ).forEach(
+
+          id => {
+
+            if (
+              !keptIds.has(id)
+            ) {
+
+              map.removeLayer(
+                treasureMarkers[id]
+              );
+
+              delete treasureMarkers[
+                id
+              ];
+
+            }
+
+          }
+
+        );
+
+
+        treasureList =
+          filteredTreasures;
+
+
+        let newAddedCount =
+          0;
+
+
+        for (
+          const candidate
+          of uniqueDeadEnds
+        ) {
+
+          /*
+           * 座標で近接判定するだけでなく、
+           * IDも座標由来にして検索回数による
+           * clusterIdの再利用・ID衝突を防ぐ。
+           */
+
+          const exists =
+            treasureList.some(
+
+              t =>
+
+                calculateDistance(
+
+                  t.lat,
+                  t.lng,
+
+                  candidate.lat,
+                  candidate.lng
+
+                ) < 15
+
+            );
+
+
+          if (!exists) {
+
+            treasureList.push({
+
+              id:
+                createTreasureId(
+                  candidate.lat,
+                  candidate.lng
+                ),
+
+              lat:
+                candidate.lat,
+
+              lng:
+                candidate.lng,
+
+              opened:
+                false
+
+            });
+
+
+            newAddedCount++;
+
+          }
+
+        }
+
+
+        localStorage.setItem(
+          STORAGE_KEY_TREASURES,
+          JSON.stringify(
+            treasureList
+          )
+        );
+
+
+        localStorage.setItem(
+          'fog_treasure_algorithm_version',
+          TREASURE_ALGORITHM_VERSION
+        );
+
+
+        if (
+          newAddedCount > 0
+        ) {
+
+          showNotification(
+            `🎁 宝箱を ${newAddedCount} 個発見！`
+          );
+
+        } else if (
+          uniqueDeadEnds.length === 0
+        ) {
+
+          showNotification(
+            '🔍 この周辺に宝箱は見つかりませんでした'
+          );
+
+        } else {
+
+          showNotification(
+            `🔍 宝箱を ${uniqueDeadEnds.length} 箇所確認しました`
+          );
+
+        }
+
+
+        renderTreasures();
+
+
+      } catch (err) {
+
+        console.error(
+          '解析エラー:',
+          err
+        );
+
+
+        showNotification(
+          '⚠️ 宝箱の解析に失敗したため、今回は追加しませんでした'
+        );
+
+      } finally {
+
+        isFetchingTreasures =
+          false;
+
+      }
+
+    }
+
+
+    // ----------------------------------------------------
+    // 宝箱を開く
+    // ----------------------------------------------------
+
+    function tryOpenTreasure(
+      treasureId
+    ) {
+
+      const treasure =
+        treasureList.find(
+          t =>
+            t.id ===
+            treasureId
+        );
+
+
+      if (
+        !treasure ||
+        treasure.opened
+      ) {
+
+        return;
+
+      }
+
+
+      if (
+        !currentLatLng ||
+        !Number.isFinite(
+          currentAccuracy
+        ) ||
+        !currentPositionTimestamp
+      ) {
+
+        showNotification(
+          '📍 現在地を取得中です。少し待ってからもう一度タップしてください'
+        );
+
+        return;
+
+      }
+
+
+      const positionAge =
+        Date.now() -
+        currentPositionTimestamp;
+
+
+      if (
+        positionAge >
+        TREASURE_TAP_POSITION_MAX_AGE_MS
+      ) {
+
+        showNotification(
+          '📍 現在地の情報が古くなっています。少し待ってからもう一度タップしてください'
+        );
+
+        return;
+
+      }
+
+
+      if (
+        currentAccuracy >
+        TREASURE_TAP_MAX_ACCURACY_METERS
+      ) {
+
+        showNotification(
+
+          `📍 GPS精度が低いため開けません（現在 ±${Math.round(
+            currentAccuracy
+          )}m）`
+
+        );
+
+        return;
+
+      }
+
+
+      const dist =
+        calculateDistance(
+
+          currentLatLng[0],
+          currentLatLng[1],
+
+          treasure.lat,
+          treasure.lng
+
+        );
+
+
+      /*
+       * GPSの誤差を考慮し、
+       * 「宝箱までの距離 + GPS誤差」
+       * が25m以内のときだけ開ける。
+       */
+
+      const safeDistance =
+        dist +
+        currentAccuracy;
+
+
+      if (
+        safeDistance >
+        TREASURE_GET_RADIUS_METERS
+      ) {
+
+        showNotification(
+
+          `🎁 宝箱に近づいてください（約${Math.round(
+            dist
+          )}m）`
+
+        );
+
+        return;
+
+      }
+
+
+      treasure.opened =
+        true;
+
+
+      openedTreasureCount +=
+        1;
+
+
+      gemCount +=
+        1;
+
+
+      localStorage.setItem(
+
+        STORAGE_KEY_TREASURES,
+
+        JSON.stringify(
+          treasureList
+        )
+
+      );
+
+
+      localStorage.setItem(
+
+        STORAGE_KEY_OPENED_TREASURES,
+
+        String(
+          openedTreasureCount
+        )
+
+      );
+
+
+      localStorage.setItem(
+
+        STORAGE_KEY_GEMS,
+
+        String(
+          gemCount
+        )
+
+      );
+
+
+      localStorage.setItem(
+
+        'fog_treasure_algorithm_version',
+
+        TREASURE_ALGORITHM_VERSION
+
+      );
+
+
+      showNotification(
+        '🎁 宝箱を開けました！ 💎 ジェムを1個獲得！'
+      );
+
+
+      renderTreasures();
+
+    }
+
+
+    // ----------------------------------------------------
+    // 通知
+    // ----------------------------------------------------
+
+    function showNotification(
+      msg
+    ) {
+
+      const notif =
+        document.getElementById(
+          'notification'
+        );
+
+
+      notif.innerText =
+        msg;
+
+
+      notif.style.display =
+        'block';
+
+
+      setTimeout(
+        () => {
+
+          notif.style.display =
+            'none';
+
+        },
+
+        3500
+
+      );
+
+    }
+
 
     renderTreasures();
 
-    document.getElementById('reload-treasure-btn').addEventListener('click', () => {
-      if (currentLatLng) {
-        lastFetchedLatLng = { lat: currentLatLng[0], lng: currentLatLng[1] };
-        fetchDeadEndTreasures(currentLatLng[0], currentLatLng[1]);
-      } else {
-        alert("GPSで現在地を取得するまでお待ちください。");
-      }
-    });
 
-    // --- 6. Screen Wake Lock API ---
-    const wakelockToggle = document.getElementById('wakelock-toggle');
-    const wakelockBadge = document.getElementById('wakelock-badge');
+    // ----------------------------------------------------
+    // 宝箱検索ボタン
+    // ----------------------------------------------------
+
+    document
+      .getElementById(
+        'reload-treasure-btn'
+      )
+      .addEventListener(
+
+        'click',
+
+        () => {
+
+          if (
+            currentLatLng
+          ) {
+
+            lastFetchedLatLng =
+              {
+
+                lat:
+                  currentLatLng[0],
+
+                lng:
+                  currentLatLng[1]
+
+              };
+
+
+            fetchDeadEndTreasures(
+
+              currentLatLng[0],
+
+              currentLatLng[1]
+
+            );
+
+
+          } else {
+
+            alert(
+              "GPSで現在地を取得するまでお待ちください。"
+            );
+
+          }
+
+        }
+
+      );
+
+
+    // ----------------------------------------------------
+    // 6. Screen Wake Lock API
+    // ----------------------------------------------------
+
+    const wakelockToggle =
+      document.getElementById(
+        'wakelock-toggle'
+      );
+
+
+    const wakelockBadge =
+      document.getElementById(
+        'wakelock-badge'
+      );
+
 
     async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
+
+      if (
+        'wakeLock' in navigator
+      ) {
+
         try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          wakelockBadge.innerText = 'ON';
-          wakelockBadge.className = 'wakelock-status status-on';
-          wakelockToggle.checked = true;
-          
-          wakeLock.addEventListener('release', () => {
-            wakeLock = null;
-            wakelockBadge.innerText = 'OFF';
-            wakelockBadge.className = 'wakelock-status status-off';
-            wakelockToggle.checked = false;
-          });
+
+          wakeLock =
+            await navigator.wakeLock.request(
+              'screen'
+            );
+
+
+          wakelockBadge.innerText =
+            'ON';
+
+
+          wakelockBadge.className =
+            'wakelock-status status-on';
+
+
+          wakelockToggle.checked =
+            true;
+
+
+          wakeLock.addEventListener(
+
+            'release',
+
+            () => {
+
+              wakeLock =
+                null;
+
+              wakelockBadge.innerText =
+                'OFF';
+
+              wakelockBadge.className =
+                'wakelock-status status-off';
+
+              wakelockToggle.checked =
+                false;
+
+            }
+
+          );
+
+
         } catch (err) {
-          wakelockBadge.innerText = 'エラー';
-          wakelockBadge.className = 'wakelock-status status-off';
-          wakelockToggle.checked = false;
+
+          wakelockBadge.innerText =
+            'エラー';
+
+          wakelockBadge.className =
+            'wakelock-status status-off';
+
+          wakelockToggle.checked =
+            false;
+
         }
+
       } else {
-        wakelockBadge.innerText = '非対応';
-        wakelockBadge.className = 'wakelock-status status-off';
-        wakelockToggle.checked = false;
+
+        wakelockBadge.innerText =
+          '非対応';
+
+        wakelockBadge.className =
+          'wakelock-status status-off';
+
+        wakelockToggle.checked =
+          false;
+
       }
+
     }
+
 
     function releaseWakeLock() {
-      if (wakeLock !== null) {
+
+      if (
+        wakeLock !== null
+      ) {
+
         wakeLock.release();
-        wakeLock = null;
+
+        wakeLock =
+          null;
+
       }
-      wakelockBadge.innerText = 'OFF';
-      wakelockBadge.className = 'wakelock-status status-off';
+
+
+      wakelockBadge.innerText =
+        'OFF';
+
+
+      wakelockBadge.className =
+        'wakelock-status status-off';
+
     }
 
-    wakelockToggle.addEventListener('change', (e) => {
-      if (e.target.checked) {
-        requestWakeLock();
-      } else {
-        releaseWakeLock();
+
+    wakelockToggle.addEventListener(
+
+      'change',
+
+      e => {
+
+        if (
+          e.target.checked
+        ) {
+
+          requestWakeLock();
+
+        } else {
+
+          releaseWakeLock();
+
+        }
+
       }
-    });
 
-    document.addEventListener('visibilitychange', async () => {
-      if (document.visibilityState === 'visible' && wakelockToggle.checked) {
-        await requestWakeLock();
+    );
+
+
+    document.addEventListener(
+
+      'visibilitychange',
+
+      async () => {
+
+        if (
+
+          document.visibilityState ===
+          'visible' &&
+
+          wakelockToggle.checked
+
+        ) {
+
+          await requestWakeLock();
+
+        }
+
       }
-    });
 
-    // --- 7. UIイベント処理 ---
-    const opacitySlider = document.getElementById('opacity-slider');
-    const opacityVal = document.getElementById('opacity-val');
+    );
 
-    opacitySlider.addEventListener('input', (e) => {
-      const value = e.target.value;
-      opacityVal.innerText = `${value}%`;
-      fogOpacity = value / 100;
-      localStorage.setItem(STORAGE_KEY_OPACITY, value);
-      requestDrawFog();
-    });
 
-    function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    // ----------------------------------------------------
+    // 7. UIイベント処理
+    // ----------------------------------------------------
+
+    const opacitySlider =
+      document.getElementById(
+        'opacity-slider'
+      );
+
+
+    const opacityVal =
+      document.getElementById(
+        'opacity-val'
+      );
+
+
+    opacitySlider.addEventListener(
+
+      'input',
+
+      e => {
+
+        const value =
+          e.target.value;
+
+
+        opacityVal.innerText =
+          `${value}%`;
+
+
+        fogOpacity =
+          value / 100;
+
+
+        localStorage.setItem(
+
+          STORAGE_KEY_OPACITY,
+
+          value
+
+        );
+
+
+        requestDrawFog();
+
+      }
+
+    );
+
+
+    function calculateDistance(
+
+      lat1,
+      lon1,
+      lat2,
+      lon2
+
+    ) {
+
+      const R =
+        6371000;
+
+
+      const dLat =
+        (
+          lat2 - lat1
+        ) *
+        Math.PI /
+        180;
+
+
+      const dLon =
+        (
+          lon2 - lon1
+        ) *
+        Math.PI /
+        180;
+
+
+      const a =
+
+        Math.sin(
+          dLat / 2
+        ) *
+        Math.sin(
+          dLat / 2
+        ) +
+
+        Math.cos(
+          lat1 *
+          Math.PI /
+          180
+        ) *
+
+        Math.cos(
+          lat2 *
+          Math.PI /
+          180
+        ) *
+
+        Math.sin(
+          dLon / 2
+        ) *
+
+        Math.sin(
+          dLon / 2
+        );
+
+
+      return (
+
+        R *
+        2 *
+        Math.atan2(
+
+          Math.sqrt(a),
+
+          Math.sqrt(
+            1 - a
+          )
+
+        )
+
+      );
+
     }
 
-    // --- 8. GPS位置情報連携 ---
-    function startGeolocation(highAccuracy = true) {
-      if (!("geolocation" in navigator)) {
-        document.getElementById("status").innerText = "GPS非対応ブラウザです";
+
+    // ----------------------------------------------------
+    // 8. GPS位置情報連携
+    // ----------------------------------------------------
+
+    function startGeolocation(
+      highAccuracy = true
+    ) {
+
+      if (
+        !("geolocation" in navigator)
+      ) {
+
+        document.getElementById(
+          "status"
+        ).innerText =
+          "GPS非対応ブラウザです";
+
         return;
+
       }
 
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
+
+      if (
+        watchId !== null
+      ) {
+
+        navigator.geolocation.clearWatch(
+          watchId
+        );
+
       }
+
 
       const options = {
-        enableHighAccuracy: highAccuracy,
-        timeout: highAccuracy ? 15000 : 30000,
-        maximumAge: 3000
+
+        enableHighAccuracy:
+          highAccuracy,
+
+        timeout:
+          highAccuracy
+            ? 15000
+            : 30000,
+
+        maximumAge:
+          3000
+
       };
 
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          const accuracy = position.coords.accuracy;
 
-          currentLatLng = [lat, lng];
-          currentAccuracy = accuracy;
-          currentPositionTimestamp = Date.now();
+      watchId =
+        navigator.geolocation.watchPosition(
 
-          if (visitedPoints.length === 0 && !userMarker) {
-            map.setView(currentLatLng, 17);
-          }
+          position => {
 
-          if (!lastFetchedLatLng || calculateDistance(lastFetchedLatLng.lat, lastFetchedLatLng.lng, lat, lng) >= REFETCH_TREASURE_DISTANCE) {
-            lastFetchedLatLng = { lat, lng };
-            fetchDeadEndTreasures(lat, lng);
-          }
+            const lat =
+              position.coords.latitude;
 
-          if (accuracy <= 150) {
-            let shouldAdd = false;
+            const lng =
+              position.coords.longitude;
 
-            if (visitedPoints.length === 0) {
-              shouldAdd = true;
-            } else {
-              const lastPoint = visitedPoints[visitedPoints.length - 1];
-              const dist = calculateDistance(lastPoint.lat, lastPoint.lng, lat, lng);
-              if (dist >= MIN_RECORD_DISTANCE_METERS) {
-                shouldAdd = true;
-              }
+            const accuracy =
+              position.coords.accuracy;
+
+
+            currentLatLng =
+              [
+                lat,
+                lng
+              ];
+
+
+            currentAccuracy =
+              accuracy;
+
+
+            currentPositionTimestamp =
+              Date.now();
+
+
+            if (
+              visitedPoints.length === 0 &&
+              !userMarker
+            ) {
+
+              map.setView(
+                currentLatLng,
+                17
+              );
+
             }
 
-            if (shouldAdd) {
-              visitedPoints.push({
-                lat: lat,
-                lng: lng,
-                radius: UNFOG_RADIUS_METERS
-              });
 
-              localStorage.setItem(STORAGE_KEY_POINTS, JSON.stringify(visitedPoints));
-              requestDrawFog();
+            if (
+
+              !lastFetchedLatLng ||
+
+              calculateDistance(
+
+                lastFetchedLatLng.lat,
+                lastFetchedLatLng.lng,
+
+                lat,
+                lng
+
+              ) >=
+              REFETCH_TREASURE_DISTANCE
+
+            ) {
+
+              lastFetchedLatLng =
+                {
+                  lat,
+                  lng
+                };
+
+
+              fetchDeadEndTreasures(
+                lat,
+                lng
+              );
+
             }
 
-          }
 
-          updateUserMarker();
+            if (
+              accuracy <= 150
+            ) {
 
-          document.getElementById("status").innerText = 
-            `開拓: ${visitedPoints.length}pt (精度:±${Math.round(accuracy)}m)`;
-        },
-        (error) => {
-          console.warn("GPSエラー:", error);
-          let errMsg = "GPSエラー";
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errMsg = "⚠️ 位置情報が「拒否」されています。";
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errMsg = "位置情報を取得できません";
-              break;
-            case error.TIMEOUT:
-              if (highAccuracy) {
-                document.getElementById("status").innerText = "高精度測位タイムアウト。標準精度で試行中...";
-                startGeolocation(false);
-                return;
+              let shouldAdd =
+                false;
+
+
+              if (
+                visitedPoints.length === 0
+              ) {
+
+                shouldAdd =
+                  true;
+
+              } else {
+
+                const lastPoint =
+                  visitedPoints[
+                    visitedPoints.length - 1
+                  ];
+
+
+                const dist =
+                  calculateDistance(
+
+                    lastPoint.lat,
+                    lastPoint.lng,
+
+                    lat,
+                    lng
+
+                  );
+
+
+                if (
+                  dist >=
+                  MIN_RECORD_DISTANCE_METERS
+                ) {
+
+                  shouldAdd =
+                    true;
+
+                }
+
               }
-              errMsg = "GPSタイムアウト。屋外でお試しください。";
-              break;
+
+
+              if (
+                shouldAdd
+              ) {
+
+                visitedPoints.push(
+
+                  {
+
+                    lat:
+                      lat,
+
+                    lng:
+                      lng,
+
+                    radius:
+                      UNFOG_RADIUS_METERS
+
+                  }
+
+                );
+
+
+                localStorage.setItem(
+
+                  STORAGE_KEY_POINTS,
+
+                  JSON.stringify(
+                    visitedPoints
+                  )
+
+                );
+
+
+                requestDrawFog();
+
+              }
+
+            }
+
+
+            updateUserMarker();
+
+
+            document.getElementById(
+              "status"
+            ).innerText =
+
+              `開拓: ${visitedPoints.length}pt (精度:±${Math.round(
+                accuracy
+              )}m)`;
+
+          },
+
+
+          error => {
+
+            console.warn(
+              "GPSエラー:",
+              error
+            );
+
+
+            let errMsg =
+              "GPSエラー";
+
+
+            switch (
+              error.code
+            ) {
+
+              case error.PERMISSION_DENIED:
+
+                errMsg =
+                  "⚠️ 位置情報が「拒否」されています。";
+
+                break;
+
+
+              case error.POSITION_UNAVAILABLE:
+
+                errMsg =
+                  "位置情報を取得できません";
+
+                break;
+
+
+              case error.TIMEOUT:
+
+                if (
+                  highAccuracy
+                ) {
+
+                  document.getElementById(
+                    "status"
+                  ).innerText =
+                    "高精度測位タイムアウト。標準精度で試行中...";
+
+
+                  startGeolocation(
+                    false
+                  );
+
+
+                  return;
+
+                }
+
+
+                errMsg =
+                  "GPSタイムアウト。屋外でお試しください。";
+
+                break;
+
+            }
+
+
+            document.getElementById(
+              "status"
+            ).innerText =
+              errMsg;
+
+          },
+
+
+          options
+
+        );
+
+    }
+
+
+    startGeolocation(
+      true
+    );
+
+
+    // ----------------------------------------------------
+    // 現在地へ移動
+    // ----------------------------------------------------
+
+    document
+      .getElementById(
+        'locate-btn'
+      )
+      .addEventListener(
+
+        'click',
+
+        () => {
+
+          if (
+            currentLatLng
+          ) {
+
+            map.flyTo(
+
+              currentLatLng,
+
+              17,
+
+              {
+                duration:
+                  1.2
+              }
+
+            );
+
+          } else {
+
+            alert(
+              "現在地を取得中です。少し待ってからお試しください。"
+            );
+
           }
-          document.getElementById("status").innerText = errMsg;
-        },
-        options
+
+        }
+
       );
+
+
+    // ----------------------------------------------------
+    // Service Worker / Cache
+    // ----------------------------------------------------
+
+    if (
+      'serviceWorker'
+      in navigator
+    ) {
+
+      navigator.serviceWorker
+        .getRegistrations()
+        .then(
+
+          registrations => {
+
+            for (
+              let registration
+              of registrations
+            ) {
+
+              registration.unregister();
+
+            }
+
+          }
+
+        );
+
     }
 
-    startGeolocation(true);
 
-    document.getElementById('locate-btn').addEventListener('click', () => {
-      if (currentLatLng) {
-        map.flyTo(currentLatLng, 17, { duration: 1.2 });
-      } else {
-        alert("現在地を取得中です。少し待ってからお試しください。");
-      }
-    });
+    if (
+      'caches' in window
+    ) {
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        for (let registration of registrations) registration.unregister();
-      });
+      caches.keys()
+        .then(
+
+          names => {
+
+            for (
+              let name
+              of names
+            ) {
+
+              caches.delete(
+                name
+              );
+
+            }
+
+          }
+
+        );
+
     }
-    if ('caches' in window) {
-      caches.keys().then(names => {
-        for (let name of names) caches.delete(name);
-      });
-    }
+
   </script>
+
 </body>
 </html>
