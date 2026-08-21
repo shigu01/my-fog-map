@@ -222,13 +222,17 @@
         <span>累計獲得宝箱:</span>
         <span id="treasure-count" style="font-weight: bold; color: #d35400;">🎁 0個</span>
       </div>
+      <div class="control-row">
+        <span>ジェム:</span>
+        <span id="gem-count" style="font-weight: bold; color: #6c5ce7;">💎 0個</span>
+      </div>
       <button id="reload-treasure-btn">🔍 周辺の宝箱を検索</button>
       <div style="font-size:9px; color:#777; line-height:1.35;">※ 宝箱の近くでマークをタップして開けます</div>
     </div>
 
     <div id="map"></div>
     <canvas id="fog-canvas"></canvas>
-    <div id="app-version">v1.0.9</div>
+    <div id="app-version">v1.1.0</div>
     
     <button id="locate-btn" title="現在地に移動">🎯</button>
   </div>
@@ -241,6 +245,8 @@
     const STORAGE_KEY_POINTS = 'fog_visited_points';
     const STORAGE_KEY_OPACITY = 'fog_opacity_value';
     const STORAGE_KEY_TREASURES = 'fog_treasures_data';
+    const STORAGE_KEY_GEMS = 'fog_gems';
+    const STORAGE_KEY_OPENED_TREASURES = 'fog_opened_treasure_count';
     
     const UNFOG_RADIUS_METERS = 50; 
     const MIN_RECORD_DISTANCE_METERS = 5;
@@ -264,6 +270,8 @@
 
     let visitedPoints = [];
     let treasureList = []; // { id, lat, lng, opened }
+    let gemCount = 0;
+    let openedTreasureCount = 0;
     let treasureMarkers = {};
     let isFetchingTreasures = false;
     let lastFetchedLatLng = null; // 前回の宝箱読み込み地点
@@ -311,6 +319,18 @@
         document.getElementById('opacity-val').innerText = `${savedOpacity}%`;
       }
 
+      const savedGemCount = localStorage.getItem(STORAGE_KEY_GEMS);
+      if (savedGemCount !== null) {
+        const parsedGems = parseInt(savedGemCount, 10);
+        gemCount = Number.isFinite(parsedGems) && parsedGems >= 0 ? parsedGems : 0;
+      }
+
+      const savedOpenedTreasureCount = localStorage.getItem(STORAGE_KEY_OPENED_TREASURES);
+      if (savedOpenedTreasureCount !== null) {
+        const parsedOpened = parseInt(savedOpenedTreasureCount, 10);
+        openedTreasureCount = Number.isFinite(parsedOpened) && parsedOpened >= 0 ? parsedOpened : 0;
+      }
+
       const savedTreasureAlgorithmVersion = localStorage.getItem('fog_treasure_algorithm_version');
       const savedTreasures = localStorage.getItem(STORAGE_KEY_TREASURES);
 
@@ -329,6 +349,13 @@
         } catch (e) { 
           treasureList = [];
         }
+      }
+
+      // 旧バージョンでは累計開封数を保存していなかったため、
+      // 初回だけ現在保存されている開封済み宝箱から引き継ぐ。
+      if (savedOpenedTreasureCount === null) {
+        openedTreasureCount = treasureList.filter(t => t.opened).length;
+        localStorage.setItem(STORAGE_KEY_OPENED_TREASURES, String(openedTreasureCount));
       }
     }
 
@@ -461,7 +488,7 @@
     // --- 5. 宝箱表示・Overpass API描画処理 ---
     function renderTreasures() {
       treasureList.forEach(t => {
-        const iconSymbol = t.opened ? '💎' : '🎁';
+        const iconSymbol = t.opened ? '✅' : '🎁';
         
         if (treasureMarkers[t.id]) {
           const el = treasureMarkers[t.id].getElement();
@@ -498,8 +525,9 @@
     }
 
     function updateTreasureUI() {
-      const openedCount = treasureList.filter(t => t.opened).length;
-      document.getElementById('treasure-count').innerText = `🎁 ${openedCount}個`;
+      document.getElementById('treasure-count').innerText = `🎁 ${openedTreasureCount}個`;
+      const gemElement = document.getElementById('gem-count');
+      if (gemElement) gemElement.innerText = `💎 ${gemCount}個`;
     }
 
     async function fetchDeadEndTreasures(lat, lng) {
@@ -795,9 +823,13 @@
       }
 
       treasure.opened = true;
+      openedTreasureCount += 1;
+      gemCount += 1;
       localStorage.setItem(STORAGE_KEY_TREASURES, JSON.stringify(treasureList));
+      localStorage.setItem(STORAGE_KEY_OPENED_TREASURES, String(openedTreasureCount));
+      localStorage.setItem(STORAGE_KEY_GEMS, String(gemCount));
       localStorage.setItem('fog_treasure_algorithm_version', TREASURE_ALGORITHM_VERSION);
-      showNotification('🎁 宝箱を開けました！');
+      showNotification('🎁 宝箱を開けました！ 💎 ジェムを1個獲得！');
       renderTreasures();
     }
 
