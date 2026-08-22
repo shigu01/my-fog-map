@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hakuchizu-v1.1.7';
+const CACHE_NAME = 'hakuchizu-v1.1.8';
 
 const APP_SHELL = [
   './',
@@ -11,171 +11,67 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then(cache =>
-        cache
-          .addAll(APP_SHELL)
-          .catch(() => {})
-      )
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll(APP_SHELL).catch(() => {})
+    )
   );
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches
-      .keys()
-      .then(keys =>
-        Promise.all(
-          keys
-            .filter(
-              key =>
-                key !== CACHE_NAME
-            )
-            .map(
-              key =>
-                caches.delete(key)
-            )
-        )
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => caches.delete(key))
       )
-      .then(() =>
-        self.clients.claim()
-      )
+    ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
 
-  if (
-    event.request.method !== 'GET'
-  ) {
-    return;
-  }
+  const url = new URL(event.request.url);
 
-  const url =
-    new URL(
-      event.request.url
-    );
-
-  if (
-    url.origin !==
-    self.location.origin
-  ) {
-    return;
-  }
-
-  /*
-   * HTMLはネットワーク優先。
-   * 古いindex.htmlが残り続けるのを防ぐ。
-   */
+  if (url.origin !== self.location.origin) return;
 
   if (
     event.request.mode === 'navigate' ||
-    url.pathname.endsWith(
-      '/index.html'
-    )
+    url.pathname.endsWith('/index.html')
   ) {
-
     event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then(response => {
+          const copy = response.clone();
 
-      fetch(
-        event.request,
-        {
-          cache:
-            'no-store'
-        }
-      )
-      .then(
-        response => {
-
-          const copy =
-            response.clone();
-
-          caches
-            .open(
-              CACHE_NAME
-            )
-            .then(
-              cache => {
-
-                cache.put(
-                  './index.html',
-                  copy
-                );
-
-              }
-            );
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put('./index.html', copy);
+          });
 
           return response;
-
-        }
-      )
-      .catch(
-        () =>
-          caches.match(
-            './index.html'
-          )
-      )
-
+        })
+        .catch(() =>
+          caches.match('./index.html')
+        )
     );
 
     return;
   }
 
-  /*
-   * HTML以外はキャッシュ優先。
-   */
-
   event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
 
-    caches
-      .match(
-        event.request
-      )
-      .then(
-        cached => {
+      return fetch(event.request).then(response => {
+        const copy = response.clone();
 
-          if (
-            cached
-          ) {
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, copy);
+        });
 
-            return cached;
-
-          }
-
-
-          return fetch(
-            event.request
-          )
-          .then(
-            response => {
-
-              const copy =
-                response.clone();
-
-              caches
-                .open(
-                  CACHE_NAME
-                )
-                .then(
-                  cache => {
-
-                    cache.put(
-                      event.request,
-                      copy
-                    );
-
-                  }
-                );
-
-              return response;
-
-            }
-          );
-
-        }
-      )
-
+        return response;
+      });
+    })
   );
-
 });
