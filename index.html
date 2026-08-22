@@ -307,7 +307,7 @@
     <canvas id="fog-canvas"></canvas>
 
     <div id="app-version">
-      v1.1.6
+      v1.1.7
     </div>
 
     <button
@@ -374,7 +374,7 @@
       'dead-end-v6';
 
     const APP_VERSION =
-      'v1.1.6';
+      'v1.1.7';
 
     const NEAR_OTHER_WAY_METERS =
       6;
@@ -431,6 +431,8 @@
     let watchId = null;
 
     let isRenderPending = false;
+
+    let isSearchNotificationVisible = false;
 
 
     // ====================================================
@@ -522,22 +524,6 @@
 
     // ====================================================
     // 宝箱データ正規化
-    //
-    // 過去バージョンでは clusterId をIDとして
-    // 使用していたため、同じIDが別の場所に
-    // 複数存在する可能性がある。
-    //
-    // その状態では、
-    //
-    // Markerの位置
-    // と
-    // find()で取得した宝箱の位置
-    //
-    // が別物になる可能性があり、
-    // 距離が数十km〜100km以上になる。
-    //
-    // 起動時に座標ベースの一意なIDへ
-    // 正規化して解消する。
     // ====================================================
 
     function normalizeTreasureList(
@@ -595,13 +581,6 @@
           );
 
 
-        /*
-         * 同じ場所に複数データが
-         * 残っている場合は統合。
-         *
-         * 開封済み状態は失わない。
-         */
-
         const existing =
           normalized.find(
             t =>
@@ -614,7 +593,9 @@
           );
 
 
-        if (existing) {
+        if (
+          existing
+        ) {
 
           if (
             raw.opened
@@ -781,11 +762,6 @@
         );
 
 
-      /*
-       * 宝箱アルゴリズム自体が変更されたときのみ
-       * 一度リセットする。
-       */
-
       if (
         savedTreasureAlgorithmVersion !==
         TREASURE_ALGORITHM_VERSION
@@ -815,21 +791,11 @@
             );
 
 
-          /*
-           * 旧形式のID・重複データを
-           * 座標ベースの一意なIDへ正規化。
-           */
-
           treasureList =
             normalizeTreasureList(
               parsed
             );
 
-
-          /*
-           * 正規化した結果を保存。
-           * これによって以後は重複IDが残らない。
-           */
 
           localStorage.setItem(
             STORAGE_KEY_TREASURES,
@@ -847,11 +813,6 @@
 
       }
 
-
-      /*
-       * 旧バージョンでは累計開封数を
-       * 保存していなかった場合の引き継ぎ。
-       */
 
       if (
         savedOpenedTreasureCount === null
@@ -946,6 +907,9 @@
       600;
 
 
+    /*
+     * 現在位置は霧より上。
+     */
     map.createPane(
       'userPane'
     );
@@ -953,7 +917,7 @@
     map.getPane(
       'userPane'
     ).style.zIndex =
-      700;
+      1100;
 
 
     const canvas =
@@ -1303,11 +1267,6 @@
         map.getCenter();
 
 
-      /*
-       * 全宝箱データから、
-       * 現在の地図周辺だけ抽出。
-       */
-
       let visibleTreasures =
         treasureList.filter(
           t =>
@@ -1327,11 +1286,6 @@
             )
         );
 
-
-      /*
-       * 最大250個まで。
-       * 多すぎる場合は中心に近いものを優先。
-       */
 
       if (
         visibleTreasures.length >
@@ -1383,12 +1337,6 @@
         );
 
 
-      /*
-       * 画面外Markerを削除。
-       *
-       * 宝箱データ自体は削除しない。
-       */
-
       Object.keys(
         treasureMarkers
       ).forEach(
@@ -1425,11 +1373,6 @@
       );
 
 
-      /*
-       * 現在の表示範囲にある宝箱だけ
-       * Markerを生成。
-       */
-
       visibleTreasures.forEach(
         t => {
 
@@ -1460,10 +1403,6 @@
             }
 
 
-            /*
-             * Markerの座標を必ず保存データに同期。
-             */
-
             existingMarker.setLatLng(
               [
                 t.lat,
@@ -1476,7 +1415,9 @@
               existingMarker.getElement();
 
 
-            if (el) {
+            if (
+              el
+            ) {
 
               el.innerHTML =
                 iconSymbol;
@@ -1540,10 +1481,6 @@
           treasureMarkers[t.id] =
             marker;
 
-
-          /*
-           * そのMarker自身のIDを利用。
-           */
 
           marker.on(
             'click',
@@ -1649,7 +1586,12 @@
         true;
 
 
-      showNotification(
+      /*
+       * 検索開始から検索終了まで、
+       * この通知を自動では消さない。
+       */
+
+      showPersistentNotification(
         '🔍 周辺の宝箱を検索中...'
       );
 
@@ -1734,6 +1676,9 @@
         );
 
 
+        hidePersistentNotification();
+
+
         showNotification(
           '⚠️ 道路データを取得できなかったため、宝箱を追加できませんでした'
         );
@@ -1812,10 +1757,6 @@
           }
         );
 
-
-        // =================================================
-        // 道路クラスタ
-        // =================================================
 
         const CLUSTER_RADIUS_METERS =
           4;
@@ -2015,10 +1956,6 @@
           [];
 
 
-        // =================================================
-        // 点と線分の距離
-        // =================================================
-
         function pointToSegmentDistanceMeters(
           p,
           a,
@@ -2028,10 +1965,8 @@
           const latRef =
             p.lat;
 
-
           const mPerDegLat =
             111320;
-
 
           const mPerDegLng =
             111320 *
@@ -2064,7 +1999,6 @@
           const A =
             toXY(a);
 
-
           const B =
             toXY(b);
 
@@ -2072,7 +2006,6 @@
           const ABx =
             B.x -
             A.x;
-
 
           const ABy =
             B.y -
@@ -2107,7 +2040,6 @@
           const closestX =
             A.x +
             ABx * t;
-
 
           const closestY =
             A.y +
@@ -2171,7 +2103,6 @@
               const a =
                 nodes[aId];
 
-
               const b =
                 nodes[bId];
 
@@ -2209,10 +2140,6 @@
 
         }
 
-
-        // =================================================
-        // 行き止まり候補
-        // =================================================
 
         clusterList.forEach(
           (
@@ -2341,10 +2268,6 @@
         );
 
 
-        // =================================================
-        // 重複除去
-        // =================================================
-
         const uniqueDeadEnds =
           [];
 
@@ -2374,10 +2297,6 @@
 
         }
 
-
-        // =================================================
-        // 一度発見した宝箱は削除しない
-        // =================================================
 
         treasureList =
           treasureList.filter(
@@ -2457,6 +2376,14 @@
         );
 
 
+        /*
+         * 検索終了。
+         * 「検索中」を消してから結果通知を表示。
+         */
+
+        hidePersistentNotification();
+
+
         if (
           newAddedCount > 0
         ) {
@@ -2490,6 +2417,9 @@
           '解析エラー:',
           err
         );
+
+
+        hidePersistentNotification();
 
 
         showNotification(
@@ -2533,9 +2463,7 @@
 
 
       /*
-       * Markerと保存データの座標が一致しているか確認。
-       * 古いキャッシュや重複データが残っている場合でも、
-       * 違っていれば正しい座標へ同期する。
+       * Markerと保存データの座標を確認。
        */
 
       const marker =
@@ -2718,7 +2646,7 @@
 
 
     // ====================================================
-    // 通知
+    // 通常通知
     // ====================================================
 
     function showNotification(
@@ -2729,6 +2657,10 @@
         document.getElementById(
           'notification'
         );
+
+
+      isSearchNotificationVisible =
+        false;
 
 
       notif.innerText =
@@ -2742,12 +2674,64 @@
       setTimeout(
         () => {
 
-          notif.style.display =
-            'none';
+          if (
+            !isSearchNotificationVisible
+          ) {
+
+            notif.style.display =
+              'none';
+
+          }
 
         },
         3500
       );
+
+    }
+
+
+    // ====================================================
+    // 検索中通知
+    // ====================================================
+
+    function showPersistentNotification(
+      msg
+    ) {
+
+      const notif =
+        document.getElementById(
+          'notification'
+        );
+
+
+      isSearchNotificationVisible =
+        true;
+
+
+      notif.innerText =
+        msg;
+
+
+      notif.style.display =
+        'block';
+
+    }
+
+
+    function hidePersistentNotification() {
+
+      isSearchNotificationVisible =
+        false;
+
+
+      const notif =
+        document.getElementById(
+          'notification'
+        );
+
+
+      notif.style.display =
+        'none';
 
     }
 
@@ -2942,7 +2926,7 @@
 
 
     // ====================================================
-    // 7. UIイベント処理
+    // 7. UIイベント
     // ====================================================
 
     const opacitySlider =
@@ -3258,6 +3242,7 @@
 
                 visitedPoints.push(
                   {
+
                     lat:
                       lat,
 
@@ -3266,6 +3251,7 @@
 
                     radius:
                       UNFOG_RADIUS_METERS
+
                   }
                 );
 
@@ -3421,17 +3407,6 @@
     // PWA更新
     // ====================================================
 
-    /*
-     * Service WorkerとCache Storageを
-     * 毎回削除するのではなく、
-     * バージョン管理されたService Workerに
-     * 更新を任せる。
-     *
-     * localStorage
-     * （探索履歴・宝箱・ジェム等）
-     * は削除しない。
-     */
-
     if (
       'serviceWorker'
       in navigator
@@ -3470,6 +3445,5 @@
     }
 
   </script>
-
 </body>
 </html>
